@@ -72,10 +72,16 @@ router.get("/alertas", requireRole(...ROLES_INVENTARIO), async (_req, res, next)
 
 const ajusteSchema = z.object({
   idProducto: z.coerce.number().int().positive("Seleccione un producto"),
-  existencia: z.coerce
-    .number({ invalid_type_error: "La existencia es obligatoria" })
-    .min(0, "La existencia no puede ser negativa"),
-  motivo: z.string().trim().max(300).optional(),
+  cantidad: z.coerce
+    .number({ invalid_type_error: "Indique cuánto sumar o restar" })
+    .refine((v) => Number.isInteger(v), {
+      message: "La cantidad debe ser un número entero",
+    })
+    .refine((v) => v !== 0, { message: "El ajuste no puede ser 0" }),
+  motivo: z.preprocess(
+    (v) => (v == null ? "" : v),
+    z.string().trim().min(1, "El motivo es obligatorio").max(300)
+  ),
 });
 
 async function generarNumeroAjuste(tx) {
@@ -100,9 +106,15 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
   try {
     const parsed = ajusteSchema.safeParse(req.body);
     if (!parsed.success) {
+      const fields = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0];
+        if (key && !fields[key]) fields[key] = issue.message;
+      }
       return res.status(400).json({
         success: false,
         message: parsed.error.issues[0]?.message || "Revise el ajuste",
+        fields,
       });
     }
 
@@ -111,7 +123,7 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
       return res.status(401).json({ success: false, message: "Sesión no válida" });
     }
 
-    const { idProducto, existencia, motivo } = parsed.data;
+    const { idProducto, cantidad, motivo } = parsed.data;
 
     const data = await db.transaction(async (tx) => {
       const [producto] = await tx
@@ -143,12 +155,17 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
       }
 
       const anterior = toNumber(inventario.existenciaActual);
-      const nueva = existencia;
-      if (nueva === anterior) {
+      const nueva = anterior + cantidad;
+      if (nueva < 0) {
         return {
           error: {
             status: 400,
-            message: "La existencia nueva es igual a la actual",
+            message:
+              "El ajuste dejaría la existencia en negativo. No se registró.",
+            fields: {
+              cantidad:
+                "El ajuste dejaría la existencia en negativo",
+            },
           },
         };
       }
@@ -175,13 +192,13 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
         idInventario: inventario.id,
         idUsuario,
         tipoMovimiento: "AJUSTE",
-        cantidad: String(Math.abs(nueva - anterior)),
+        cantidad: String(Math.abs(cantidad)),
         existenciaAnterior: String(anterior),
         existenciaNueva: String(nueva),
         moduloOrigen: "INVENTARIO",
         idRegistroOrigen: producto.id,
         numeroDocumento: numero,
-        motivo: motivo || "Ajuste de inventario",
+        motivo,
       });
 
       const minimo = toNumber(producto.existenciaMinima);
@@ -189,6 +206,8 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
         existencia: nueva,
         minimo,
         alerta: nueva <= minimo,
+        numeroDocumento: numero,
+        cantidad,
       };
     });
 
@@ -196,6 +215,7 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
       return res.status(data.error.status).json({
         success: false,
         message: data.error.message,
+        fields: data.error.fields,
       });
     }
 
@@ -333,7 +353,11 @@ router.get(
         data: rows.map((r) => ({
           id: r.id,
           tipo: r.tipoMovimiento,
-          cantidad: toNumber(r.cantidad),
+          cantidad:
+            r.tipoMovimiento === "AJUSTE" &&
+            toNumber(r.existenciaNueva) < toNumber(r.existenciaAnterior)
+              ? -toNumber(r.cantidad)
+              : toNumber(r.cantidad),
           existenciaAnterior: toNumber(r.existenciaAnterior),
           existenciaNueva: toNumber(r.existenciaNueva),
           fechaMovimiento: r.fechaMovimiento,

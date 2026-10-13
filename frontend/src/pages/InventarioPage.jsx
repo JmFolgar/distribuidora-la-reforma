@@ -67,9 +67,10 @@ export default function InventarioPage() {
   const [ajusteAbierto, setAjusteAbierto] = useState(false);
   const [ajuste, setAjuste] = useState({
     idProducto: "",
-    existencia: "",
+    cantidad: "",
     motivo: "",
   });
+  const [ajusteFields, setAjusteFields] = useState({});
   const [ajusteError, setAjusteError] = useState("");
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
 
@@ -172,35 +173,45 @@ export default function InventarioPage() {
   }
 
   function abrirAjuste() {
-    setAjuste({ idProducto: "", existencia: "", motivo: "" });
+    setAjuste({ idProducto: "", cantidad: "", motivo: "" });
+    setAjusteFields({});
     setAjusteError("");
     setAjusteAbierto(true);
   }
 
   async function guardarAjuste(e) {
     e.preventDefault();
-    const existencia = Number(ajuste.existencia);
-    if (!ajuste.idProducto) {
-      setAjusteError("Seleccione un producto");
-      return;
+    const fields = {};
+    const cantidad = Number(ajuste.cantidad);
+    if (!ajuste.idProducto) fields.idProducto = "Seleccione un producto";
+    if (ajuste.cantidad === "" || ajuste.cantidad === "-" || Number.isNaN(cantidad)) {
+      fields.cantidad = "Indique cuánto sumar o restar";
+    } else if (!Number.isInteger(cantidad)) {
+      fields.cantidad = "La cantidad debe ser un número entero";
+    } else if (cantidad === 0) {
+      fields.cantidad = "El ajuste no puede ser 0";
     }
-    if (ajuste.existencia === "" || Number.isNaN(existencia) || existencia < 0) {
-      setAjusteError("Indique una existencia válida, igual o mayor a 0");
+    if (!ajuste.motivo.trim()) fields.motivo = "El motivo es obligatorio";
+    if (Object.keys(fields).length > 0) {
+      setAjusteFields(fields);
+      setAjusteError("Revise el ajuste");
       return;
     }
     setGuardandoAjuste(true);
     setAjusteError("");
+    setAjusteFields({});
     try {
       await crearAjusteInventario({
         idProducto: Number(ajuste.idProducto),
-        existencia,
-        motivo: ajuste.motivo.trim() || undefined,
+        cantidad,
+        motivo: ajuste.motivo.trim(),
       });
       setGuardandoAjuste(false);
       setAjusteAbierto(false);
       notificarAlertas();
       await cargar(aplicados);
     } catch (err) {
+      if (err.body?.fields) setAjusteFields(err.body.fields);
       setAjusteError(err.message || "No se pudo registrar el ajuste");
       setGuardandoAjuste(false);
     }
@@ -367,11 +378,13 @@ export default function InventarioPage() {
           >
             <h2 id="ajuste-title">Registrar ajuste</h2>
             <p className="page-subtitle">
-              Indica la existencia que debe quedar. Si queda igual o menor al
-              mínimo, el producto aparece en las alertas.
+              Un número positivo suma y uno negativo resta. El motivo es
+              obligatorio y la existencia no puede quedar en negativo.
             </p>
             <form className="modal-form" onSubmit={guardarAjuste} noValidate>
-              <label className="field">
+              <label
+                className={`field ${ajusteFields.idProducto ? "field--error" : ""}`}
+              >
                 <span>
                   Producto
                   <span className="field-required" aria-hidden="true">*</span>
@@ -388,39 +401,58 @@ export default function InventarioPage() {
                     .filter((p) => p.activo !== false)
                     .map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.codigo} — {p.nombre}
+                        {p.codigo} — {p.nombre} (existencia {Number(p.existencia)})
                       </option>
                     ))}
                 </select>
+                {ajusteFields.idProducto && (
+                  <em className="field-error">{ajusteFields.idProducto}</em>
+                )}
               </label>
-              <label className="field">
+              <label
+                className={`field ${ajusteFields.cantidad ? "field--error" : ""}`}
+              >
                 <span>
-                  Existencia nueva
+                  Cantidad
                   <span className="field-required" aria-hidden="true">*</span>
                 </span>
                 <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={ajuste.existencia}
-                  onChange={(e) =>
-                    setAjuste((prev) => ({ ...prev, existencia: e.target.value }))
-                  }
-                  placeholder="Ej. 10"
+                  type="text"
+                  inputMode="numeric"
+                  value={ajuste.cantidad}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value !== "" && value !== "-" && !/^-?\d+$/.test(value)) {
+                      return;
+                    }
+                    setAjuste((prev) => ({ ...prev, cantidad: value }));
+                  }}
+                  placeholder="Ej. -2"
                   disabled={guardandoAjuste}
                 />
+                {ajusteFields.cantidad && (
+                  <em className="field-error">{ajusteFields.cantidad}</em>
+                )}
               </label>
-              <label className="field">
-                <span>Motivo</span>
+              <label
+                className={`field ${ajusteFields.motivo ? "field--error" : ""}`}
+              >
+                <span>
+                  Motivo
+                  <span className="field-required" aria-hidden="true">*</span>
+                </span>
                 <input
                   value={ajuste.motivo}
                   onChange={(e) =>
                     setAjuste((prev) => ({ ...prev, motivo: e.target.value }))
                   }
-                  placeholder="Ej. Conteo físico"
+                  placeholder="Ej. Producto dañado"
                   maxLength={300}
                   disabled={guardandoAjuste}
                 />
+                {ajusteFields.motivo && (
+                  <em className="field-error">{ajusteFields.motivo}</em>
+                )}
               </label>
               {ajusteError && (
                 <p className="form-error" role="alert">
