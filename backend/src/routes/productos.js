@@ -9,6 +9,12 @@ import {
   ferInventario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import {
+  borrarImagen,
+  rechazarImagenInvalida,
+  rutaPublica,
+  subirImagen,
+} from "../imagenProducto.js";
 import { enteroNoNegativo, montoPositivo } from "../validacion.js";
 
 const router = Router();
@@ -94,6 +100,7 @@ function mapProducto(row) {
     existencia,
     stockBajo: existencia < minimo,
     estado: row.estado,
+    imagen: row.imagen || null,
     activo: row.estado === "A",
     fechaCreacion: row.fechaCreacion,
     fechaModificacion: row.fechaModificacion,
@@ -116,6 +123,7 @@ async function productoConInventario(id) {
       precioVenta: ferProducto.precioVenta,
       existenciaMinima: ferProducto.existenciaMinima,
       estado: ferProducto.estado,
+      imagen: ferProducto.imagen,
       fechaCreacion: ferProducto.fechaCreacion,
       fechaModificacion: ferProducto.fechaModificacion,
       existenciaActual: ferInventario.existenciaActual,
@@ -173,6 +181,7 @@ async function listarProductosQuery(soloActivos = false) {
       precioVenta: ferProducto.precioVenta,
       existenciaMinima: ferProducto.existenciaMinima,
       estado: ferProducto.estado,
+      imagen: ferProducto.imagen,
       fechaCreacion: ferProducto.fechaCreacion,
       fechaModificacion: ferProducto.fechaModificacion,
       existenciaActual: ferInventario.existenciaActual,
@@ -215,10 +224,12 @@ router.get("/", requireRole(...ROLES_LECTURA), async (_req, res, next) => {
   }
 });
 
-router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
+router.post("/", requireRole(...ROLES_ESCRITURA), subirImagen, async (req, res, next) => {
   try {
+    if (rechazarImagenInvalida(req, res)) return;
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
+      if (req.file) borrarImagen(rutaPublica(req.file.filename));
       return res.status(400).json({
         success: false,
         message: "Revise los campos obligatorios",
@@ -243,6 +254,7 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
       .limit(1);
 
     if (codigoExiste) {
+      if (req.file) borrarImagen(rutaPublica(req.file.filename));
       return res.status(409).json({
         success: false,
         code: "CODIGO_DUPLICADO",
@@ -304,6 +316,7 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
         precioVenta: precioVenta.toFixed(2),
         porcentajeImpuesto: "0",
         existenciaMinima: existenciaMinima.toFixed(3),
+        imagen: req.file ? rutaPublica(req.file.filename) : null,
         estado: "A",
       })
       .returning();
@@ -321,6 +334,7 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
       message: "Producto registrado correctamente",
     });
   } catch (err) {
+    if (req.file) borrarImagen(rutaPublica(req.file.filename));
     if (err?.code === "23505") {
       return res.status(409).json({
         success: false,
@@ -408,6 +422,7 @@ router.delete("/:id", requireRole(...ROLES_ESCRITURA), async (req, res, next) =>
       await tx.delete(ferInventario).where(eq(ferInventario.idProducto, id));
       await tx.delete(ferProducto).where(eq(ferProducto.id, id));
     });
+    borrarImagen(producto.imagen);
 
     res.json({
       success: true,
@@ -467,8 +482,10 @@ router.patch(
 router.patch(
   "/:id",
   requireRole(...ROLES_ESCRITURA),
+  subirImagen,
   async (req, res, next) => {
     try {
+      if (rechazarImagenInvalida(req, res)) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) {
         return res.status(400).json({
@@ -494,6 +511,7 @@ router.patch(
 
       const parsed = updateSchema.safeParse(req.body);
       if (!parsed.success) {
+        if (req.file) borrarImagen(rutaPublica(req.file.filename));
         return res.status(400).json({
           success: false,
           message: "Revise los campos obligatorios",
@@ -502,7 +520,7 @@ router.patch(
       }
 
       const [producto] = await db
-        .select({ id: ferProducto.id })
+        .select({ id: ferProducto.id, imagen: ferProducto.imagen })
         .from(ferProducto)
         .where(eq(ferProducto.id, id))
         .limit(1);
@@ -515,15 +533,21 @@ router.patch(
       }
 
       const { precioVenta, existenciaMinima } = parsed.data;
+      const imagenNueva = req.file ? rutaPublica(req.file.filename) : null;
 
       await db
         .update(ferProducto)
         .set({
           precioVenta: precioVenta.toFixed(2),
           existenciaMinima: existenciaMinima.toFixed(3),
+          ...(imagenNueva ? { imagen: imagenNueva } : {}),
           fechaModificacion: new Date(),
         })
         .where(eq(ferProducto.id, id));
+
+      if (imagenNueva && producto.imagen && producto.imagen !== imagenNueva) {
+        borrarImagen(producto.imagen);
+      }
 
       res.json({
         success: true,

@@ -142,6 +142,7 @@ export const ferProducto = pgTable("FER_PRODUCTO", {
   codigo: varchar("PRO_CODIGO", { length: 50 }).notNull(),
   nombre: varchar("PRO_NOMBRE", { length: 150 }).notNull(),
   descripcion: varchar("PRO_DESCRIPCION", { length: 500 }),
+  imagen: varchar("PRO_IMAGEN", { length: 300 }),
   precioCompra: numeric("PRO_PRECIO_COMPRA", { precision: 14, scale: 2 })
     .notNull()
     .default("0"),

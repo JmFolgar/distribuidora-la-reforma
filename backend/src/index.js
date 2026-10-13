@@ -1,4 +1,6 @@
 import "./loadEnv.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import healthRouter from "./routes/health.js";
@@ -17,6 +19,12 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use(
+  "/api/uploads",
+  express.static(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../uploads")
+  )
+);
 
 app.get("/", (_req, res) => {
   res.json({

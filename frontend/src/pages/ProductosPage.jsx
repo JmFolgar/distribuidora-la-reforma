@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Search, Trash2, UserCheck } from "lucide-react";
+import { ImageOff, Loader2, Pencil, Plus, Search, Trash2, UserCheck, X, ZoomIn } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -30,7 +30,18 @@ function formatMoney(value) {
   });
 }
 
-function validarFormulario(form, modo) {
+const MAX_IMAGEN = 2 * 1024 * 1024;
+
+function validarImagen(archivo) {
+  if (!archivo) return "";
+  const tipoOk =
+    archivo.type === "image/jpeg" || archivo.type === "image/png";
+  if (!tipoOk) return "La imagen debe ser JPG o PNG";
+  if (archivo.size > MAX_IMAGEN) return "La imagen no puede superar 2 MB";
+  return "";
+}
+
+function validarFormulario(form, modo, imagen) {
   const fields = {};
   if (modo === "crear") {
     if (!form.codigo.trim()) fields.codigo = "El código es obligatorio";
@@ -50,6 +61,9 @@ function validarFormulario(form, modo) {
   } else if (!enteroValido(form.existenciaMinima) || Number(form.existenciaMinima) < 0) {
     fields.existenciaMinima = "Debe ser un número entero igual o mayor a 0";
   }
+
+  const errorImagen = validarImagen(imagen);
+  if (errorImagen) fields.imagen = errorImagen;
 
   return fields;
 }
@@ -71,6 +85,9 @@ export default function ProductosPage() {
   const [busqueda, setBusqueda] = useState("");
   const [confirmacion, setConfirmacion] = useState(null);
   const [resultado, setResultado] = useState(null);
+  const [imagen, setImagen] = useState(null);
+  const [vistaPrevia, setVistaPrevia] = useState("");
+  const [imagenAmpliada, setImagenAmpliada] = useState(null);
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -104,6 +121,15 @@ export default function ProductosPage() {
     cargar();
   }, [cargar]);
 
+  useEffect(() => {
+    if (!imagenAmpliada) return undefined;
+    function onKey(e) {
+      if (e.key === "Escape") setImagenAmpliada(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [imagenAmpliada]);
+
   function abrirCrear() {
     setModal("crear");
     setEditando(null);
@@ -113,6 +139,8 @@ export default function ProductosPage() {
     });
     setFieldErrors({});
     setFormError("");
+    setImagen(null);
+    setVistaPrevia("");
   }
 
   function abrirEditar(producto) {
@@ -128,6 +156,8 @@ export default function ProductosPage() {
     });
     setFieldErrors({});
     setFormError("");
+    setImagen(null);
+    setVistaPrevia("");
   }
 
   function cerrarModal(forzar = false) {
@@ -136,6 +166,21 @@ export default function ProductosPage() {
     setEditando(null);
     setForm(EMPTY_FORM);
     setFieldErrors({});
+    setFormError("");
+    setImagen(null);
+    setVistaPrevia("");
+  }
+
+  function onImagen(e) {
+    const archivo = e.target.files?.[0] || null;
+    setImagen(archivo);
+    setVistaPrevia(archivo ? URL.createObjectURL(archivo) : "");
+    setFieldErrors((prev) => {
+      if (!prev.imagen) return prev;
+      const next = { ...prev };
+      delete next.imagen;
+      return next;
+    });
     setFormError("");
   }
 
@@ -209,7 +254,7 @@ export default function ProductosPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
-    const locals = validarFormulario(form, modal);
+    const locals = validarFormulario(form, modal, imagen);
     if (Object.keys(locals).length > 0) {
       setFieldErrors(locals);
       return;
@@ -224,12 +269,12 @@ export default function ProductosPage() {
           idCategoria: Number(form.idCategoria),
           precioVenta: Number(form.precioVenta),
           existenciaMinima: Number(form.existenciaMinima),
-        });
+        }, imagen);
       } else {
         await updateProducto(editando.id, {
           precioVenta: Number(form.precioVenta),
           existenciaMinima: Number(form.existenciaMinima),
-        });
+        }, imagen);
       }
       setGuardando(false);
       cerrarModal(true);
@@ -296,6 +341,7 @@ export default function ProductosPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>Imagen</th>
                   <th>Código</th>
                   <th>Nombre</th>
                   <th>Categoría</th>
@@ -309,6 +355,34 @@ export default function ProductosPage() {
               <tbody>
                 {productosFiltrados.map((p) => (
                   <tr key={p.id}>
+                    <td>
+                      {p.imagen ? (
+                        <span className="producto-thumb-wrap">
+                          <img
+                            className="producto-thumb"
+                            src={p.imagen}
+                            alt=""
+                          />
+                          <button
+                            type="button"
+                            className="producto-zoom"
+                            aria-label={`Ampliar imagen de ${p.nombre}`}
+                            onClick={() =>
+                              setImagenAmpliada({
+                                src: p.imagen,
+                                nombre: p.nombre,
+                              })
+                            }
+                          >
+                            <ZoomIn size={12} strokeWidth={2} />
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="producto-thumb producto-thumb--empty" aria-hidden>
+                          <ImageOff size={16} strokeWidth={1.75} />
+                        </span>
+                      )}
+                    </td>
                     <td className="mono">{p.codigo}</td>
                     <td>
                       <strong>{p.nombre}</strong>
@@ -374,7 +448,7 @@ export default function ProductosPage() {
                 ))}
                 {productosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={esAdmin ? 8 : 7} className="empty-cell">
+                    <td colSpan={esAdmin ? 9 : 8} className="empty-cell">
                       {productos.length === 0
                         ? "No hay productos registrados."
                         : "No se encontraron productos con esa búsqueda."}
@@ -406,7 +480,7 @@ export default function ProductosPage() {
             <p className="page-subtitle">
               {modal === "crear"
                 ? "Ingresa los datos del producto. La existencia inicia en 0."
-                : "Puedes cambiar el precio y el mínimo. La existencia no se edita a mano."}
+                : "Puedes cambiar el precio, el mínimo y la imagen. La existencia no se edita a mano."}
             </p>
 
             <form className="modal-form" onSubmit={handleSubmit} noValidate>
@@ -577,6 +651,57 @@ export default function ProductosPage() {
                 </label>
               )}
 
+              <div
+                className={`field ${fieldErrors.imagen ? "field--error" : ""}`}
+              >
+                <span>Imagen</span>
+                {(vistaPrevia || editando?.imagen) && (
+                  <span className="producto-thumb-wrap producto-thumb-wrap--preview">
+                    <img
+                      className="producto-preview"
+                      src={vistaPrevia || editando.imagen}
+                      alt=""
+                    />
+                    <button
+                      type="button"
+                      className="producto-zoom"
+                      aria-label="Ampliar imagen"
+                      onClick={() =>
+                        setImagenAmpliada({
+                          src: vistaPrevia || editando.imagen,
+                          nombre: form.nombre || editando?.nombre || "Producto",
+                        })
+                      }
+                    >
+                      <ZoomIn size={12} strokeWidth={2} />
+                    </button>
+                  </span>
+                )}
+                <div className="file-picker">
+                  <input
+                    id="producto-imagen"
+                    className="file-picker__input"
+                    type="file"
+                    accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                    onChange={onImagen}
+                    disabled={guardando}
+                  />
+                  <label
+                    htmlFor="producto-imagen"
+                    className="file-picker__btn"
+                  >
+                    Seleccionar archivo
+                  </label>
+                  <span className="file-picker__name">
+                    {imagen?.name || "Ningún archivo seleccionado"}
+                  </span>
+                </div>
+                <em className="field-help">JPG o PNG, máximo 2 MB.</em>
+                {fieldErrors.imagen && (
+                  <em className="field-error">{fieldErrors.imagen}</em>
+                )}
+              </div>
+
               {formError && (
                 <p className="form-error" role="alert">
                   {formError}
@@ -706,6 +831,33 @@ export default function ProductosPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {imagenAmpliada && (
+        <div
+          className="modal-backdrop imagen-ampliada-backdrop"
+          role="presentation"
+          onClick={() => setImagenAmpliada(null)}
+        >
+          <figure
+            className="imagen-ampliada"
+            role="dialog"
+            aria-modal="true"
+            aria-label={imagenAmpliada.nombre}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="icon-btn imagen-ampliada__cerrar"
+              aria-label="Cerrar"
+              onClick={() => setImagenAmpliada(null)}
+            >
+              <X size={18} strokeWidth={1.75} />
+            </button>
+            <img src={imagenAmpliada.src} alt={imagenAmpliada.nombre} />
+            <figcaption>{imagenAmpliada.nombre}</figcaption>
+          </figure>
         </div>
       )}
     </AppShell>

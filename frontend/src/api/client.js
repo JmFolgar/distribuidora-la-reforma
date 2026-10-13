@@ -18,10 +18,10 @@ async function parseBody(res) {
 }
 
 export async function apiRequest(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
+  const headers = { ...options.headers };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = getToken();
   if (token) {
@@ -140,17 +140,26 @@ export function listCategorias() {
   return apiRequest("/productos/categorias");
 }
 
-export function createProducto(payload) {
+function productoFormData(payload, imagen) {
+  const data = new FormData();
+  for (const [clave, valor] of Object.entries(payload)) {
+    if (valor != null) data.append(clave, String(valor));
+  }
+  if (imagen) data.append("imagen", imagen);
+  return data;
+}
+
+export function createProducto(payload, imagen) {
   return apiRequest("/productos", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: productoFormData(payload, imagen),
   });
 }
 
-export function updateProducto(id, payload) {
+export function updateProducto(id, payload, imagen) {
   return apiRequest(`/productos/${id}`, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: productoFormData(payload, imagen),
   });
 }
 
