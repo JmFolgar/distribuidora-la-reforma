@@ -6,6 +6,7 @@ import {
   createProducto,
   listCategorias,
   listProductos,
+  notificarAlertas,
   updateProducto,
 } from "../api/client";
 
@@ -173,6 +174,7 @@ export default function ProductosPage() {
       }
       setGuardando(false);
       cerrarModal(true);
+      notificarAlertas();
       await cargar();
     } catch (err) {
       if (err.body?.fields) {

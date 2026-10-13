@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
-import { listMovimientosInventario, listProductos } from "../api/client";
+import {
+  crearAjusteInventario,
+  listMovimientosInventario,
+  listProductos,
+  notificarAlertas,
+} from "../api/client";
 
 const TIPOS = [
   { value: "", label: "Todos" },
@@ -59,6 +64,14 @@ export default function InventarioPage() {
   const [error, setError] = useState("");
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
   const [aplicados, setAplicados] = useState(FILTROS_VACIOS);
+  const [ajusteAbierto, setAjusteAbierto] = useState(false);
+  const [ajuste, setAjuste] = useState({
+    idProducto: "",
+    existencia: "",
+    motivo: "",
+  });
+  const [ajusteError, setAjusteError] = useState("");
+  const [guardandoAjuste, setGuardandoAjuste] = useState(false);
 
   const hayFiltros = Boolean(
     aplicados.idProducto ||
@@ -158,6 +171,41 @@ export default function InventarioPage() {
     cargar(filtros);
   }
 
+  function abrirAjuste() {
+    setAjuste({ idProducto: "", existencia: "", motivo: "" });
+    setAjusteError("");
+    setAjusteAbierto(true);
+  }
+
+  async function guardarAjuste(e) {
+    e.preventDefault();
+    const existencia = Number(ajuste.existencia);
+    if (!ajuste.idProducto) {
+      setAjusteError("Seleccione un producto");
+      return;
+    }
+    if (ajuste.existencia === "" || Number.isNaN(existencia) || existencia < 0) {
+      setAjusteError("Indique una existencia válida, igual o mayor a 0");
+      return;
+    }
+    setGuardandoAjuste(true);
+    setAjusteError("");
+    try {
+      await crearAjusteInventario({
+        idProducto: Number(ajuste.idProducto),
+        existencia,
+        motivo: ajuste.motivo.trim() || undefined,
+      });
+      setGuardandoAjuste(false);
+      setAjusteAbierto(false);
+      notificarAlertas();
+      await cargar(aplicados);
+    } catch (err) {
+      setAjusteError(err.message || "No se pudo registrar el ajuste");
+      setGuardandoAjuste(false);
+    }
+  }
+
   function limpiar() {
     setFiltros(FILTROS_VACIOS);
     setAplicados(FILTROS_VACIOS);
@@ -165,7 +213,14 @@ export default function InventarioPage() {
   }
 
   return (
-    <AppShell title="Movimientos">
+    <AppShell
+      title="Movimientos"
+      actions={
+        <button type="button" className="btn btn-primary btn-inline" onClick={abrirAjuste}>
+          Registrar ajuste
+        </button>
+      }
+    >
       {error && (
         <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
           {error}
@@ -296,6 +351,110 @@ export default function InventarioPage() {
           </div>
         )}
       </section>
+
+      {ajusteAbierto && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => !guardandoAjuste && setAjusteAbierto(false)}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ajuste-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="ajuste-title">Registrar ajuste</h2>
+            <p className="page-subtitle">
+              Indica la existencia que debe quedar. Si queda igual o menor al
+              mínimo, el producto aparece en las alertas.
+            </p>
+            <form className="modal-form" onSubmit={guardarAjuste} noValidate>
+              <label className="field">
+                <span>
+                  Producto
+                  <span className="field-required" aria-hidden="true">*</span>
+                </span>
+                <select
+                  value={ajuste.idProducto}
+                  onChange={(e) =>
+                    setAjuste((prev) => ({ ...prev, idProducto: e.target.value }))
+                  }
+                  disabled={guardandoAjuste}
+                >
+                  <option value="">Seleccione…</option>
+                  {productos
+                    .filter((p) => p.activo !== false)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.codigo} — {p.nombre}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>
+                  Existencia nueva
+                  <span className="field-required" aria-hidden="true">*</span>
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={ajuste.existencia}
+                  onChange={(e) =>
+                    setAjuste((prev) => ({ ...prev, existencia: e.target.value }))
+                  }
+                  placeholder="Ej. 10"
+                  disabled={guardandoAjuste}
+                />
+              </label>
+              <label className="field">
+                <span>Motivo</span>
+                <input
+                  value={ajuste.motivo}
+                  onChange={(e) =>
+                    setAjuste((prev) => ({ ...prev, motivo: e.target.value }))
+                  }
+                  placeholder="Ej. Conteo físico"
+                  maxLength={300}
+                  disabled={guardandoAjuste}
+                />
+              </label>
+              {ajusteError && (
+                <p className="form-error" role="alert">
+                  {ajusteError}
+                </p>
+              )}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => setAjusteAbierto(false)}
+                  disabled={guardandoAjuste}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-inline"
+                  disabled={guardandoAjuste}
+                >
+                  {guardandoAjuste ? (
+                    <>
+                      <Loader2 size={16} className="spin" />
+                      Guardando…
+                    </>
+                  ) : (
+                    "Guardar"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

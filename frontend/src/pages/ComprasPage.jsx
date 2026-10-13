@@ -8,6 +8,7 @@ import {
   listProductosActivos,
   listProveedoresActivos,
   updateCompra,
+  notificarAlertas,
   recibirCompra,
 } from "../api/client";
 
@@ -286,6 +287,7 @@ export default function ComprasPage() {
       await recibirCompra(recibiendo.id);
       setGuardando(false);
       setRecibiendo(null);
+      notificarAlertas();
       await cargarLista();
     } catch (err) {
       setFormError(err.message || "No se pudo recibir la compra");

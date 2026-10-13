@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   ferMovimientoInventario,
@@ -33,6 +34,182 @@ function nombreUsuario(row) {
   ].filter(Boolean);
   return partes.join(" ").trim() || row.nombreUsuario || "—";
 }
+
+router.get("/alertas", requireRole(...ROLES_INVENTARIO), async (_req, res, next) => {
+  try {
+    const rows = await db
+      .select({
+        id: ferProducto.id,
+        codigo: ferProducto.codigo,
+        nombre: ferProducto.nombre,
+        minimo: ferProducto.existenciaMinima,
+        existencia: ferInventario.existenciaActual,
+      })
+      .from(ferProducto)
+      .leftJoin(ferInventario, eq(ferInventario.idProducto, ferProducto.id))
+      .where(
+        and(
+          eq(ferProducto.estado, "A"),
+          sql`COALESCE(${ferInventario.existenciaActual}, 0) <= ${ferProducto.existenciaMinima}`
+        )
+      )
+      .orderBy(asc(ferProducto.nombre));
+
+    res.json({
+      success: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        codigo: r.codigo,
+        nombre: r.nombre,
+        existencia: toNumber(r.existencia),
+        minimo: toNumber(r.minimo),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const ajusteSchema = z.object({
+  idProducto: z.coerce.number().int().positive("Seleccione un producto"),
+  existencia: z.coerce
+    .number({ invalid_type_error: "La existencia es obligatoria" })
+    .min(0, "La existencia no puede ser negativa"),
+  motivo: z.string().trim().max(300).optional(),
+});
+
+async function generarNumeroAjuste(tx) {
+  const year = new Date().getFullYear();
+  const prefix = `AJ-${year}-`;
+  const [row] = await tx
+    .select({ numero: ferMovimientoInventario.numeroDocumento })
+    .from(ferMovimientoInventario)
+    .where(sql`${ferMovimientoInventario.numeroDocumento} LIKE ${prefix + "%"}`)
+    .orderBy(desc(ferMovimientoInventario.numeroDocumento))
+    .limit(1);
+
+  let secuencia = 1;
+  if (row?.numero) {
+    const parsed = Number.parseInt(row.numero.slice(prefix.length), 10);
+    if (Number.isFinite(parsed)) secuencia = parsed + 1;
+  }
+  return `${prefix}${String(secuencia).padStart(5, "0")}`;
+}
+
+router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next) => {
+  try {
+    const parsed = ajusteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || "Revise el ajuste",
+      });
+    }
+
+    const idUsuario = req.user?.sub;
+    if (!idUsuario) {
+      return res.status(401).json({ success: false, message: "Sesión no válida" });
+    }
+
+    const { idProducto, existencia, motivo } = parsed.data;
+
+    const data = await db.transaction(async (tx) => {
+      const [producto] = await tx
+        .select()
+        .from(ferProducto)
+        .where(eq(ferProducto.id, idProducto))
+        .limit(1);
+
+      if (!producto || producto.estado !== "A") {
+        return { error: { status: 400, message: "Seleccione un producto activo" } };
+      }
+
+      let [inventario] = await tx
+        .select()
+        .from(ferInventario)
+        .where(eq(ferInventario.idProducto, idProducto))
+        .limit(1);
+
+      if (!inventario) {
+        [inventario] = await tx
+          .insert(ferInventario)
+          .values({
+            idProducto,
+            existenciaActual: "0",
+            cantidadReservada: "0",
+            version: 0,
+          })
+          .returning();
+      }
+
+      const anterior = toNumber(inventario.existenciaActual);
+      const nueva = existencia;
+      if (nueva === anterior) {
+        return {
+          error: {
+            status: 400,
+            message: "La existencia nueva es igual a la actual",
+          },
+        };
+      }
+      if (toNumber(inventario.cantidadReservada) > nueva) {
+        return {
+          error: {
+            status: 400,
+            message: "La existencia no puede quedar debajo de lo reservado",
+          },
+        };
+      }
+
+      await tx
+        .update(ferInventario)
+        .set({
+          existenciaActual: String(nueva),
+          fechaUltimoMovimiento: sql`CURRENT_TIMESTAMP`,
+          version: inventario.version + 1,
+        })
+        .where(eq(ferInventario.id, inventario.id));
+
+      const numero = await generarNumeroAjuste(tx);
+      await tx.insert(ferMovimientoInventario).values({
+        idInventario: inventario.id,
+        idUsuario,
+        tipoMovimiento: "AJUSTE",
+        cantidad: String(Math.abs(nueva - anterior)),
+        existenciaAnterior: String(anterior),
+        existenciaNueva: String(nueva),
+        moduloOrigen: "INVENTARIO",
+        idRegistroOrigen: producto.id,
+        numeroDocumento: numero,
+        motivo: motivo || "Ajuste de inventario",
+      });
+
+      const minimo = toNumber(producto.existenciaMinima);
+      return {
+        existencia: nueva,
+        minimo,
+        alerta: nueva <= minimo,
+      };
+    });
+
+    if (data.error) {
+      return res.status(data.error.status).json({
+        success: false,
+        message: data.error.message,
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      data,
+      message: data.alerta
+        ? "Ajuste registrado. El producto quedó en alerta de existencia mínima."
+        : "Ajuste registrado correctamente",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get(
   "/movimientos",

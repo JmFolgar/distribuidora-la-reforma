@@ -207,6 +207,21 @@ export function recibirCompra(id) {
   return apiRequest(`/compras/${id}/recibir`, { method: "POST" });
 }
 
+export function listAlertasInventario() {
+  return apiRequest("/inventario/alertas");
+}
+
+export function crearAjusteInventario(payload) {
+  return apiRequest("/inventario/ajustes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function notificarAlertas() {
+  window.dispatchEvent(new Event("inventario-alertas"));
+}
+
 export function listMovimientosInventario(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));
