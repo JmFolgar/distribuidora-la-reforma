@@ -854,6 +854,147 @@
   box-shadow: var(--shadow-xs);
 }
 
+.mov-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.mov-filtros__control {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.mov-filtros__control:first-child {
+  flex: 1 1 240px;
+}
+
+.mov-filtros__control:nth-child(2) {
+  flex: 0 1 180px;
+}
+
+.mov-filtros__control--date {
+  flex: 0 1 160px;
+}
+
+.mov-filtros__control > span {
+  padding-left: 0.15rem;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+
+.mov-filtros__control select,
+.mov-filtros__control input[type="date"] {
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  padding: 0 2rem 0 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.mov-filtros__control--date input[type="date"] {
+  padding-right: 0.45rem;
+  background-image: none;
+}
+
+.mov-filtros__control select:hover,
+.mov-filtros__control input[type="date"]:hover {
+  background-color: var(--color-bg);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.mov-filtros__control select:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%234F46E5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.mov-filtros__control select:focus,
+.mov-filtros__control input[type="date"]:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background-color: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.mov-filtros__control select option {
+  background-color: #fff;
+  color: var(--color-text);
+}
+
+.mov-filtros__control select option:hover,
+.mov-filtros__control select option:focus,
+.mov-filtros__control select option:checked {
+  background: #f3f4f6 linear-gradient(#f3f4f6, #f3f4f6);
+  color: var(--color-text);
+}
+
+.mov-filtros__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding-bottom: 0.05rem;
+}
+
+.mov-filtros__apply {
+  height: 40px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mov-filtros__apply:hover {
+  background: var(--color-accent-hover);
+}
+
+.mov-filtros__clear {
+  height: 40px;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mov-filtros__clear:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+@media (max-width: 860px) {
+  .mov-filtros__actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+
 .card-title {
   margin: 0 0 0.5rem;
   font-size: 16px;

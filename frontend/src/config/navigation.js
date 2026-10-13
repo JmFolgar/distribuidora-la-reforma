@@ -82,7 +82,7 @@ export const NAV_GROUPS = [
       },
       {
         id: "inventario",
-        label: "Inventario",
+        label: "Movimientos",
         path: "/inventario",
         icon: Warehouse,
         roles: ["ADMINISTRADOR", "SUPERVISOR"],

@@ -207,6 +207,12 @@ export function recibirCompra(id) {
   return apiRequest(`/compras/${id}/recibir`, { method: "POST" });
 }
 
-export function listMovimientosInventario() {
-  return apiRequest("/inventario/movimientos");
+export function listMovimientosInventario(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));
+  if (filtros.tipo) params.set("tipo", filtros.tipo);
+  if (filtros.fechaDesde) params.set("fechaDesde", filtros.fechaDesde);
+  if (filtros.fechaHasta) params.set("fechaHasta", filtros.fechaHasta);
+  const qs = params.toString();
+  return apiRequest(`/inventario/movimientos${qs ? `?${qs}` : ""}`);
 }
