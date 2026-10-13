@@ -8,6 +8,7 @@ import usuariosRouter from "./routes/usuarios.js";
 import clientesRouter from "./routes/clientes.js";
 import ubicacionesRouter from "./routes/ubicaciones.js";
 import proveedoresRouter from "./routes/proveedores.js";
+import comprasRouter from "./routes/compras.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -31,6 +32,7 @@ app.use("/api/usuarios", usuariosRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/ubicaciones", ubicacionesRouter);
 app.use("/api/proveedores", proveedoresRouter);
+app.use("/api/compras", comprasRouter);
 
 app.use(notFound);
 app.use(errorHandler);

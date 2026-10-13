@@ -156,36 +156,60 @@ router.get(
   }
 );
 
+async function listarProductosQuery(soloActivos = false) {
+  const condiciones = soloActivos ? eq(ferProducto.estado, "A") : undefined;
+
+  let query = db
+    .select({
+      id: ferProducto.id,
+      codigo: ferProducto.codigo,
+      nombre: ferProducto.nombre,
+      descripcion: ferProducto.descripcion,
+      idCategoria: ferProducto.idCategoria,
+      categoriaNombre: ferCategoria.nombre,
+      idUnidadMedida: ferProducto.idUnidadMedida,
+      unidadNombre: ferUnidadMedida.nombre,
+      unidadAbreviatura: ferUnidadMedida.abreviatura,
+      precioCompra: ferProducto.precioCompra,
+      precioVenta: ferProducto.precioVenta,
+      existenciaMinima: ferProducto.existenciaMinima,
+      estado: ferProducto.estado,
+      fechaCreacion: ferProducto.fechaCreacion,
+      fechaModificacion: ferProducto.fechaModificacion,
+      existenciaActual: ferInventario.existenciaActual,
+    })
+    .from(ferProducto)
+    .innerJoin(ferCategoria, eq(ferProducto.idCategoria, ferCategoria.id))
+    .innerJoin(
+      ferUnidadMedida,
+      eq(ferProducto.idUnidadMedida, ferUnidadMedida.id)
+    )
+    .leftJoin(ferInventario, eq(ferInventario.idProducto, ferProducto.id))
+    .orderBy(asc(ferProducto.codigo));
+
+  if (condiciones) {
+    query = query.where(condiciones);
+  }
+
+  return query;
+}
+
+router.get(
+  "/activos",
+  requireRole("ADMINISTRADOR", "SUPERVISOR"),
+  async (_req, res, next) => {
+    try {
+      const rows = await listarProductosQuery(true);
+      res.json({ success: true, data: rows.map(mapProducto) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 router.get("/", requireRole(...ROLES_LECTURA), async (_req, res, next) => {
   try {
-    const rows = await db
-      .select({
-        id: ferProducto.id,
-        codigo: ferProducto.codigo,
-        nombre: ferProducto.nombre,
-        descripcion: ferProducto.descripcion,
-        idCategoria: ferProducto.idCategoria,
-        categoriaNombre: ferCategoria.nombre,
-        idUnidadMedida: ferProducto.idUnidadMedida,
-        unidadNombre: ferUnidadMedida.nombre,
-        unidadAbreviatura: ferUnidadMedida.abreviatura,
-        precioCompra: ferProducto.precioCompra,
-        precioVenta: ferProducto.precioVenta,
-        existenciaMinima: ferProducto.existenciaMinima,
-        estado: ferProducto.estado,
-        fechaCreacion: ferProducto.fechaCreacion,
-        fechaModificacion: ferProducto.fechaModificacion,
-        existenciaActual: ferInventario.existenciaActual,
-      })
-      .from(ferProducto)
-      .innerJoin(ferCategoria, eq(ferProducto.idCategoria, ferCategoria.id))
-      .innerJoin(
-        ferUnidadMedida,
-        eq(ferProducto.idUnidadMedida, ferUnidadMedida.id)
-      )
-      .leftJoin(ferInventario, eq(ferInventario.idProducto, ferProducto.id))
-      .orderBy(asc(ferProducto.codigo));
-
+    const rows = await listarProductosQuery(false);
     res.json({ success: true, data: rows.map(mapProducto) });
   } catch (err) {
     next(err);

@@ -15,6 +15,7 @@ import UsuariosPage from "./pages/UsuariosPage";
 import ClientesPage from "./pages/ClientesPage";
 import ProductosPage from "./pages/ProductosPage";
 import ProveedoresPage from "./pages/ProveedoresPage";
+import ComprasPage from "./pages/ComprasPage";
 import "./App.css";
 
 /**
@@ -94,6 +95,16 @@ export default function App() {
               <ProtectedRoute>
                 <RoleRoute roles={["ADMINISTRADOR", "SUPERVISOR"]}>
                   <ProveedoresPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/compras"
+            element={
+              <ProtectedRoute>
+                <RoleRoute roles={["ADMINISTRADOR", "SUPERVISOR"]}>
+                  <ComprasPage />
                 </RoleRoute>
               </ProtectedRoute>
             }

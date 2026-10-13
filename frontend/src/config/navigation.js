@@ -79,7 +79,6 @@ export const NAV_GROUPS = [
         path: "/compras",
         icon: PackagePlus,
         roles: ["ADMINISTRADOR", "SUPERVISOR"],
-        soon: true,
       },
       {
         id: "inventario",

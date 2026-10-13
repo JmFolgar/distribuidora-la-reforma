@@ -6,6 +6,7 @@ import {
   integer,
   numeric,
   timestamp,
+  date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -182,6 +183,45 @@ export const ferProveedor = pgTable("FER_PROVEEDOR", {
   fechaCreacion: timestamp("PRV_FECHA_CREACION", { withTimezone: true })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const ferCompra = pgTable("FER_COMPRA", {
+  id: bigint("COM_ID_COMPRA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idProveedor: bigint("COM_ID_PROVEEDOR", { mode: "number" }).notNull(),
+  numeroCompra: varchar("COM_NUMERO_COMPRA", { length: 40 }).notNull(),
+  fechaCompra: timestamp("COM_FECHA_COMPRA", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  fechaEsperada: date("COM_FECHA_ESPERADA"),
+  estado: varchar("COM_ESTADO", { length: 20 }).notNull().default("CREADA"),
+  observacion: varchar("COM_OBSERVACION", { length: 500 }),
+});
+
+export const ferDetalleCompra = pgTable("FER_DETALLE_COMPRA", {
+  id: bigint("DCO_ID_DETALLE_COMPRA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idCompra: bigint("DCO_ID_COMPRA", { mode: "number" }).notNull(),
+  idProducto: bigint("DCO_ID_PRODUCTO", { mode: "number" }).notNull(),
+  cantidad: numeric("DCO_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  costoUnitario: numeric("DCO_COSTO_UNITARIO", {
+    precision: 14,
+    scale: 2,
+  }).notNull(),
+  porcentajeDescuento: numeric("DCO_PORCENTAJE_DESCUENTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  porcentajeImpuesto: numeric("DCO_PORCENTAJE_IMPUESTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
 });
 
 export const ferInventario = pgTable("FER_INVENTARIO", {

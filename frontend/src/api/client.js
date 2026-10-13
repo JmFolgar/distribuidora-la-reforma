@@ -28,10 +28,19 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    const err = new Error(
+      "No se pudo conectar con el servidor. Verifique su conexión e intente de nuevo."
+    );
+    err.status = 0;
+    throw err;
+  }
 
   const body = await parseBody(res);
 
@@ -166,4 +175,30 @@ export function desactivarProveedor(id) {
 
 export function activarProveedor(id) {
   return apiRequest(`/proveedores/${id}/activar`, { method: "PATCH" });
+}
+
+export function listProductosActivos() {
+  return apiRequest("/productos/activos");
+}
+
+export function listCompras() {
+  return apiRequest("/compras");
+}
+
+export function getCompra(id) {
+  return apiRequest(`/compras/${id}`);
+}
+
+export function createCompra(payload) {
+  return apiRequest("/compras", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCompra(id, payload) {
+  return apiRequest(`/compras/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
