@@ -154,6 +154,14 @@ export function updateProducto(id, payload) {
   });
 }
 
+export function eliminarProducto(id) {
+  return apiRequest(`/productos/${id}`, { method: "DELETE" });
+}
+
+export function activarProducto(id) {
+  return apiRequest(`/productos/${id}/activar`, { method: "PATCH" });
+}
+
 export function listProveedores() {
   return apiRequest("/proveedores");
 }

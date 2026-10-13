@@ -334,6 +334,137 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
   }
 });
 
+async function productoTieneHistorial(id) {
+  const result = await db.execute(sql`
+    SELECT (
+      EXISTS (
+        SELECT 1
+        FROM "FER_MOVIMIENTO_INVENTARIO" m
+        INNER JOIN "FER_INVENTARIO" i
+          ON i."INV_ID_INVENTARIO" = m."MOV_ID_INVENTARIO"
+        WHERE i."INV_ID_PRODUCTO" = ${id}
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM "FER_DETALLE_COMPRA"
+        WHERE "DCO_ID_PRODUCTO" = ${id}
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM "FER_DETALLE_PEDIDO"
+        WHERE "DPE_ID_PRODUCTO" = ${id}
+      )
+    ) AS tiene
+  `);
+  return Boolean(result.rows?.[0]?.tiene);
+}
+
+router.delete("/:id", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Identificador de producto inválido",
+      });
+    }
+
+    const [producto] = await db
+      .select()
+      .from(ferProducto)
+      .where(eq(ferProducto.id, id))
+      .limit(1);
+
+    if (!producto) {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado",
+      });
+    }
+
+    const tieneHistorial = await productoTieneHistorial(id);
+
+    if (tieneHistorial) {
+      if (producto.estado !== "I") {
+        await db
+          .update(ferProducto)
+          .set({
+            estado: "I",
+            fechaModificacion: new Date(),
+          })
+          .where(eq(ferProducto.id, id));
+      }
+
+      const data = await productoConInventario(id);
+      return res.json({
+        success: true,
+        action: "DESACTIVADO",
+        data,
+        message:
+          "No se borró el producto porque tiene movimientos. Pasó a inactivo para conservar su historial y ya no se puede elegir en compras ni pedidos.",
+      });
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(ferInventario).where(eq(ferInventario.idProducto, id));
+      await tx.delete(ferProducto).where(eq(ferProducto.id, id));
+    });
+
+    res.json({
+      success: true,
+      action: "ELIMINADO",
+      message: "Producto eliminado porque nunca tuvo movimientos",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch(
+  "/:id/activar",
+  requireRole(...ROLES_ESCRITURA),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Identificador de producto inválido",
+        });
+      }
+
+      const [producto] = await db
+        .select()
+        .from(ferProducto)
+        .where(eq(ferProducto.id, id))
+        .limit(1);
+
+      if (!producto) {
+        return res.status(404).json({
+          success: false,
+          message: "Producto no encontrado",
+        });
+      }
+
+      await db
+        .update(ferProducto)
+        .set({
+          estado: "A",
+          fechaModificacion: new Date(),
+        })
+        .where(eq(ferProducto.id, id));
+
+      res.json({
+        success: true,
+        data: await productoConInventario(id),
+        message: "Producto reactivado. Vuelve a estar disponible en compras y pedidos.",
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 router.patch(
   "/:id",
   requireRole(...ROLES_ESCRITURA),

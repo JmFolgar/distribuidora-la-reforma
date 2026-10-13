@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Search } from "lucide-react";
+import { Loader2, Pencil, Plus, Search, Trash2, UserCheck } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { useAuth } from "../auth/AuthContext";
 import {
+  activarProducto,
   createProducto,
+  eliminarProducto,
   listCategorias,
   listProductos,
   notificarAlertas,
@@ -67,6 +69,8 @@ export default function ProductosPage() {
   const [formError, setFormError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [confirmacion, setConfirmacion] = useState(null);
+  const [resultado, setResultado] = useState(null);
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -133,6 +137,61 @@ export default function ProductosPage() {
     setForm(EMPTY_FORM);
     setFieldErrors({});
     setFormError("");
+  }
+
+  async function confirmarAccion() {
+    if (!confirmacion) return;
+    setGuardando(true);
+    setFormError("");
+    try {
+      let siguiente;
+      if (confirmacion.tipo === "eliminar") {
+        const res = await eliminarProducto(confirmacion.producto.id);
+        const nombre = confirmacion.producto.nombre;
+        siguiente =
+          res.action === "DESACTIVADO"
+            ? {
+                titulo: "Producto desactivado",
+                mensaje: (
+                  <>
+                    No se borró <strong>{nombre}</strong> porque tiene
+                    movimientos. Pasó a inactivo para conservar su historial y
+                    ya no aparece en compras ni pedidos.
+                  </>
+                ),
+              }
+            : {
+                titulo: "Producto eliminado",
+                mensaje: (
+                  <>
+                    <strong>{nombre}</strong> se eliminó de la lista porque
+                    nunca tuvo movimientos.
+                  </>
+                ),
+              };
+      } else {
+        const nombre = confirmacion.producto.nombre;
+        await activarProducto(confirmacion.producto.id);
+        siguiente = {
+          titulo: "Producto reactivado",
+          mensaje: (
+            <>
+              <strong>{nombre}</strong> volvió a estar disponible para elegir
+              en las compras.
+            </>
+          ),
+        };
+      }
+      setGuardando(false);
+      setConfirmacion(null);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      setResultado(siguiente);
+      notificarAlertas();
+      await cargar();
+    } catch (err) {
+      setFormError(err.message || "No se pudo completar la acción");
+      setGuardando(false);
+    }
   }
 
   function onChange(e) {
@@ -243,6 +302,7 @@ export default function ProductosPage() {
                   <th>Precio venta</th>
                   <th>Existencia</th>
                   <th>Mínimo</th>
+                  <th>Estado</th>
                   {esAdmin && <th>Acciones</th>}
                 </tr>
               </thead>
@@ -263,6 +323,13 @@ export default function ProductosPage() {
                       </span>
                     </td>
                     <td className="mono">{Number(p.existenciaMinima)}</td>
+                    <td>
+                      <span
+                        className={`badge ${p.activo ? "badge--success" : "badge--danger"}`}
+                      >
+                        {p.activo ? "Activo" : "Inactivo"}
+                      </span>
+                    </td>
                     {esAdmin && (
                       <td>
                         <div className="row-actions">
@@ -275,6 +342,31 @@ export default function ProductosPage() {
                             <Pencil size={14} strokeWidth={1.75} />
                             Editar
                           </button>
+                          {p.activo ? (
+                            <button
+                              type="button"
+                              className="btn-action btn-action--danger"
+                              onClick={() => {
+                                setConfirmacion({ tipo: "eliminar", producto: p });
+                                setFormError("");
+                              }}
+                            >
+                              <Trash2 size={14} strokeWidth={1.75} />
+                              Eliminar
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-action btn-action--success"
+                              onClick={() => {
+                                setConfirmacion({ tipo: "reactivar", producto: p });
+                                setFormError("");
+                              }}
+                            >
+                              <UserCheck size={14} strokeWidth={1.75} />
+                              Reactivar
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -282,7 +374,7 @@ export default function ProductosPage() {
                 ))}
                 {productosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={esAdmin ? 7 : 6} className="empty-cell">
+                    <td colSpan={esAdmin ? 8 : 7} className="empty-cell">
                       {productos.length === 0
                         ? "No hay productos registrados."
                         : "No se encontraron productos con esa búsqueda."}
@@ -513,6 +605,103 @@ export default function ProductosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {resultado && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setResultado(null)}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="producto-resultado-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="producto-resultado-title">{resultado.titulo}</h2>
+            <p className="page-subtitle">{resultado.mensaje}</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-inline"
+                onClick={() => setResultado(null)}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmacion && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => !guardando && setConfirmacion(null)}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="producto-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="producto-confirm-title">
+              {confirmacion.tipo === "eliminar"
+                ? "Eliminar producto"
+                : "Reactivar producto"}
+            </h2>
+            <p className="page-subtitle">
+              {confirmacion.tipo === "eliminar" ? (
+                <>
+                  ¿Eliminar <strong>{confirmacion.producto.nombre}</strong>? Si
+                  nunca tuvo movimientos, se borra de la lista. Si ya tiene
+                  historial, no se borra: pasa a inactivo y deja de aparecer en
+                  compras y pedidos.
+                </>
+              ) : (
+                <>
+                  ¿Reactivar <strong>{confirmacion.producto.nombre}</strong>?
+                  Volverá a estar disponible para elegir en las compras.
+                </>
+              )}
+            </p>
+            {formError && (
+              <p className="form-error" role="alert">
+                {formError}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setConfirmacion(null)}
+                disabled={guardando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`btn btn-inline ${confirmacion.tipo === "eliminar" ? "btn-danger" : "btn-success"}`}
+                onClick={confirmarAccion}
+                disabled={guardando}
+              >
+                {guardando ? (
+                  <>
+                    <Loader2 size={16} className="spin" />
+                    Guardando…
+                  </>
+                ) : confirmacion.tipo === "eliminar" ? (
+                  "Eliminar"
+                ) : (
+                  "Reactivar"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
