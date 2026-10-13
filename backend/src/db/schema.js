@@ -168,6 +168,22 @@ export const ferProducto = pgTable("FER_PRODUCTO", {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const ferProveedor = pgTable("FER_PROVEEDOR", {
+  id: bigint("PRV_ID_PROVEEDOR", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idDireccion: bigint("PRV_ID_DIRECCION", { mode: "number" }).notNull(),
+  nit: varchar("PRV_NIT", { length: 20 }).notNull(),
+  razonSocial: varchar("PRV_RAZON_SOCIAL", { length: 180 }).notNull(),
+  nombreContacto: varchar("PRV_NOMBRE_CONTACTO", { length: 180 }),
+  correo: varchar("PRV_CORREO", { length: 254 }).notNull(),
+  telefono: varchar("PRV_TELEFONO", { length: 30 }).notNull(),
+  estado: char("PRV_ESTADO", { length: 1 }).notNull().default("A"),
+  fechaCreacion: timestamp("PRV_FECHA_CREACION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const ferInventario = pgTable("FER_INVENTARIO", {
   id: bigint("INV_ID_INVENTARIO", { mode: "number" })
     .generatedByDefaultAsIdentity()

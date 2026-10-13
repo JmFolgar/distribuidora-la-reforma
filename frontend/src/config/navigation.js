@@ -72,7 +72,6 @@ export const NAV_GROUPS = [
         path: "/proveedores",
         icon: Truck,
         roles: ["ADMINISTRADOR", "SUPERVISOR"],
-        soon: true,
       },
       {
         id: "compras",

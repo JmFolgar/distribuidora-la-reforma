@@ -144,3 +144,26 @@ export function updateProducto(id, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function listProveedores() {
+  return apiRequest("/proveedores");
+}
+
+export function listProveedoresActivos() {
+  return apiRequest("/proveedores/activos");
+}
+
+export function createProveedor(payload) {
+  return apiRequest("/proveedores", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function desactivarProveedor(id) {
+  return apiRequest(`/proveedores/${id}/desactivar`, { method: "PATCH" });
+}
+
+export function activarProveedor(id) {
+  return apiRequest(`/proveedores/${id}/activar`, { method: "PATCH" });
+}

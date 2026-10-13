@@ -7,6 +7,7 @@ import productosRouter from "./routes/productos.js";
 import usuariosRouter from "./routes/usuarios.js";
 import clientesRouter from "./routes/clientes.js";
 import ubicacionesRouter from "./routes/ubicaciones.js";
+import proveedoresRouter from "./routes/proveedores.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -29,6 +30,7 @@ app.use("/api/productos", productosRouter);
 app.use("/api/usuarios", usuariosRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/ubicaciones", ubicacionesRouter);
+app.use("/api/proveedores", proveedoresRouter);
 
 app.use(notFound);
 app.use(errorHandler);
