@@ -69,7 +69,7 @@ export default function LoginPage() {
   return (
     <div className="login-split">
       <aside className="login-hero">
-        <p className="login-hero__name">Distribuidora Nova</p>
+        <p className="login-hero__name">Distribuidora La Reforma</p>
 
         <div className="login-hero__content">
           <div className="login-hero__copy">

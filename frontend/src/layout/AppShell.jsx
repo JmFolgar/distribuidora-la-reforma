@@ -39,7 +39,7 @@ export default function AppShell({ children, title, subtitle, actions }) {
           <NovaMark size={36} />
           {!collapsed && (
             <div className="sidebar__brand-text">
-              <strong>Distribuidora Nova</strong>
+              <strong>Distribuidora La Reforma</strong>
               <span>Panel de gestión</span>
             </div>
           )}

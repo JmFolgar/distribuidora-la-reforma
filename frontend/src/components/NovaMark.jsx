@@ -1,4 +1,4 @@
-/** Icono hexagonal del logo Nova (versión compacta). */
+/** Icono hexagonal del logo (versión compacta). */
 export default function NovaMark({ size = 36, className = "" }) {
   return (
     <svg
