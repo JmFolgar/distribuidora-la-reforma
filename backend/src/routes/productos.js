@@ -9,6 +9,7 @@ import {
   ferInventario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { enteroNoNegativo, montoPositivo } from "../validacion.js";
 
 const router = Router();
 
@@ -39,22 +40,20 @@ const createSchema = z.object({
     .number({ invalid_type_error: "Seleccione una categoría" })
     .int()
     .positive("Seleccione una categoría"),
-  precioVenta: z.coerce
-    .number({ invalid_type_error: "El precio de venta es obligatorio" })
-    .refine((v) => v > 0, { message: "El precio debe ser mayor a 0" }),
-  existenciaMinima: z.coerce
-    .number({ invalid_type_error: "La existencia mínima es obligatoria" })
-    .min(0, "La existencia mínima no puede ser negativa"),
+  precioVenta: montoPositivo(
+    "El precio de venta es obligatorio",
+    "El precio debe ser mayor a 0"
+  ),
+  existenciaMinima: enteroNoNegativo("La existencia mínima es obligatoria"),
   idUnidadMedida: z.coerce.number().int().positive().optional(),
 });
 
 const updateSchema = z.object({
-  precioVenta: z.coerce
-    .number({ invalid_type_error: "El precio de venta es obligatorio" })
-    .refine((v) => v > 0, { message: "El precio debe ser mayor a 0" }),
-  existenciaMinima: z.coerce
-    .number({ invalid_type_error: "La existencia mínima es obligatoria" })
-    .min(0, "La existencia mínima no puede ser negativa"),
+  precioVenta: montoPositivo(
+    "El precio de venta es obligatorio",
+    "El precio debe ser mayor a 0"
+  ),
+  existenciaMinima: enteroNoNegativo("La existencia mínima es obligatoria"),
 });
 
 async function unidadPorDefecto() {

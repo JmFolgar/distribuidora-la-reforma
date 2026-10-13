@@ -11,6 +11,7 @@ import {
   notificarAlertas,
   recibirCompra,
 } from "../api/client";
+import { enteroValido, montoValido } from "../utils/validacion";
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString("es-GT", {
@@ -59,18 +60,17 @@ function validarFormulario(form) {
     if (!linea.idProducto) {
       fields[`lineas_${index}_idProducto`] = "Seleccione un producto";
     }
-    const cantidad = Number(linea.cantidad);
-    if (linea.cantidad === "" || Number.isNaN(cantidad)) {
+    if (linea.cantidad === "") {
       fields[`lineas_${index}_cantidad`] = "La cantidad es obligatoria";
-    } else if (cantidad <= 0) {
-      fields[`lineas_${index}_cantidad`] = "La cantidad debe ser mayor a 0";
+    } else if (!enteroValido(linea.cantidad) || Number(linea.cantidad) <= 0) {
+      fields[`lineas_${index}_cantidad`] =
+        "La cantidad debe ser un número entero mayor a 0";
     }
-    const costo = Number(linea.costoUnitario);
-    if (linea.costoUnitario === "" || Number.isNaN(costo)) {
+    if (linea.costoUnitario === "") {
       fields[`lineas_${index}_costoUnitario`] = "El costo es obligatorio";
-    } else if (costo <= 0) {
+    } else if (!montoValido(linea.costoUnitario)) {
       fields[`lineas_${index}_costoUnitario`] =
-        "El costo debe ser mayor a 0";
+        "El costo debe ser mayor a 0 y tener como máximo 2 decimales";
     }
   });
 
@@ -623,17 +623,17 @@ export default function ComprasPage() {
                           >
                             <span>Cantidad</span>
                             <input
-                              type="number"
-                              min="0"
-                              step="any"
+                              type="text"
+                              inputMode="numeric"
                               value={linea.cantidad}
-                              onChange={(e) =>
-                                onLineaChange(index, "cantidad", e.target.value)
-                              }
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value !== "" && !/^\d+$/.test(value)) return;
+                                onLineaChange(index, "cantidad", value);
+                              }}
                               placeholder="Ej. 10"
                               disabled={guardando}
                               className="mono"
-                              inputMode="decimal"
                             />
                             {fieldErrors[`lineas_${index}_cantidad`] && (
                               <em className="field-error">

@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import NovaMark from "../components/NovaMark";
 import loginIllustration from "../assets/login_patron_hexagonal_nova.svg";
+import { correoValido } from "../utils/validacion";
 
 const HIGHLIGHTS = [
   { icon: Package, text: "Inventario siempre al día" },
@@ -25,6 +26,7 @@ export default function LoginPage() {
   const [contrasena, setContrasena] = useState("");
   const [mostrarClave, setMostrarClave] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [hintRecuperacion, setHintRecuperacion] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
@@ -35,22 +37,16 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
     setHintRecuperacion(false);
 
     const correoTrim = correo.trim();
-    const sinCorreo = !correoTrim;
-    const sinContrasena = !contrasena;
-
-    if (sinCorreo && sinContrasena) {
-      setError("Ingresa tu correo y tu contraseña");
-      return;
-    }
-    if (sinCorreo) {
-      setError("Ingresa tu correo");
-      return;
-    }
-    if (sinContrasena) {
-      setError("Ingresa tu contraseña");
+    const fields = {};
+    if (!correoTrim) fields.correo = "El correo es obligatorio";
+    else if (!correoValido(correoTrim)) fields.correo = "Correo inválido";
+    if (!contrasena) fields.contrasena = "La contraseña es obligatoria";
+    if (Object.keys(fields).length > 0) {
+      setFieldErrors(fields);
       return;
     }
 
@@ -109,7 +105,7 @@ export default function LoginPage() {
             <p>Ingresa con tu correo y contraseña</p>
           </div>
 
-          <label className="field">
+          <label className={`field ${fieldErrors.correo ? "field--error" : ""}`}>
             <span>Correo</span>
             <input
               type="email"
@@ -119,13 +115,22 @@ export default function LoginPage() {
               onChange={(e) => {
                 setCorreo(e.target.value);
                 if (error) setError("");
+                setFieldErrors((prev) => {
+                  if (!prev.correo) return prev;
+                  const next = { ...prev };
+                  delete next.correo;
+                  return next;
+                });
               }}
               placeholder="correo@ejemplo.com"
               disabled={enviando}
             />
+            {fieldErrors.correo && (
+              <em className="field-error">{fieldErrors.correo}</em>
+            )}
           </label>
 
-          <label className="field">
+          <label className={`field ${fieldErrors.contrasena ? "field--error" : ""}`}>
             <span>Contraseña</span>
             <div className="field-password">
               <input
@@ -136,6 +141,12 @@ export default function LoginPage() {
                 onChange={(e) => {
                   setContrasena(e.target.value);
                   if (error) setError("");
+                  setFieldErrors((prev) => {
+                    if (!prev.contrasena) return prev;
+                    const next = { ...prev };
+                    delete next.contrasena;
+                    return next;
+                  });
                 }}
                 placeholder="••••••••"
                 disabled={enviando}
@@ -156,6 +167,9 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+            {fieldErrors.contrasena && (
+              <em className="field-error">{fieldErrors.contrasena}</em>
+            )}
           </label>
 
           <div className="login-card__meta">

@@ -11,6 +11,7 @@ import {
   notificarAlertas,
   updateProducto,
 } from "../api/client";
+import { enteroValido, montoValido } from "../utils/validacion";
 
 const EMPTY_FORM = {
   codigo: "",
@@ -37,18 +38,17 @@ function validarFormulario(form, modo) {
     if (!form.idCategoria) fields.idCategoria = "Seleccione una categoría";
   }
 
-  const precio = Number(form.precioVenta);
-  if (form.precioVenta === "" || Number.isNaN(precio)) {
+  if (form.precioVenta === "" || form.precioVenta == null) {
     fields.precioVenta = "El precio de venta es obligatorio";
-  } else if (precio <= 0) {
-    fields.precioVenta = "El precio debe ser mayor a 0";
+  } else if (!montoValido(form.precioVenta)) {
+    fields.precioVenta =
+      "El precio debe ser mayor a 0 y tener como máximo 2 decimales";
   }
 
-  const minimo = Number(form.existenciaMinima);
-  if (form.existenciaMinima === "" || Number.isNaN(minimo)) {
+  if (form.existenciaMinima === "" || form.existenciaMinima == null) {
     fields.existenciaMinima = "La existencia mínima es obligatoria";
-  } else if (minimo < 0) {
-    fields.existenciaMinima = "La existencia mínima no puede ser negativa";
+  } else if (!enteroValido(form.existenciaMinima) || Number(form.existenciaMinima) < 0) {
+    fields.existenciaMinima = "Debe ser un número entero igual o mayor a 0";
   }
 
   return fields;
@@ -548,13 +548,16 @@ export default function ProductosPage() {
                     </span>
                   </span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     name="existenciaMinima"
                     value={form.existenciaMinima}
-                    onChange={onChange}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value !== "" && !/^\d+$/.test(value)) return;
+                      onChange(e);
+                    }}
                     placeholder="Ej. 10"
-                    min="0"
-                    step="1"
                     disabled={guardando}
                     required
                     aria-required="true"

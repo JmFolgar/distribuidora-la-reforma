@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { ferUsuario, ferRol, ferUsuarioRol } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { contrasenaSchema, nombrePersonaSchema } from "../validacion.js";
 
 const router = Router();
 
@@ -13,18 +14,16 @@ router.use(requireAuth, requireRole("ADMINISTRADOR"));
 const ROLES_VALIDOS = ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"];
 
 const createSchema = z.object({
-  nombre: z.string().trim().min(1, "El nombre es obligatorio").max(120),
+  nombre: nombrePersonaSchema,
   correo: z.string().trim().email("Correo inválido").max(254),
-  contrasena: z
-    .string()
-    .min(8, "La contraseña debe tener al menos 8 caracteres"),
+  contrasena: contrasenaSchema,
   rol: z.enum(ROLES_VALIDOS, {
     errorMap: () => ({ message: "Seleccione un rol válido" }),
   }),
 });
 
 const updateSchema = z.object({
-  nombre: z.string().trim().min(1, "El nombre es obligatorio").max(120),
+  nombre: nombrePersonaSchema,
   rol: z.enum(ROLES_VALIDOS, {
     errorMap: () => ({ message: "Seleccione un rol válido" }),
   }),

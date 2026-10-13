@@ -8,6 +8,12 @@ import {
   desactivarProveedor,
   listProveedores,
 } from "../api/client";
+import {
+  correoValido,
+  nitValido,
+  nombrePersonaValido,
+  telefonoValido,
+} from "../utils/validacion";
 
 const EMPTY_FORM = {
   nombre: "",
@@ -17,14 +23,25 @@ const EMPTY_FORM = {
   personaContacto: "",
 };
 
-function correoValido(correo) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
-}
-
 function validarFormulario(form) {
   const fields = {};
   if (!form.nombre.trim()) fields.nombre = "El nombre es obligatorio";
+  else if (!nombrePersonaValido(form.nombre)) {
+    fields.nombre = "El nombre solo puede incluir letras";
+  }
+  if (
+    form.personaContacto.trim() &&
+    !nombrePersonaValido(form.personaContacto)
+  ) {
+    fields.personaContacto = "El nombre solo puede incluir letras";
+  }
   if (!form.nit.trim()) fields.nit = "El NIT es obligatorio";
+  else if (!nitValido(form.nit)) {
+    fields.nit = "El NIT solo puede incluir letras, números y un guion";
+  }
+  if (form.telefono.trim() && !telefonoValido(form.telefono)) {
+    fields.telefono = "El teléfono debe tener 8 dígitos";
+  }
   if (form.correo.trim() && !correoValido(form.correo.trim())) {
     fields.correo = "Correo inválido";
   }
@@ -497,7 +514,9 @@ export default function ProveedoresPage() {
 
                   <div className="form-section">
                     <p className="form-section__title">Persona de contacto</p>
-                    <label className="field">
+                    <label
+                      className={`field ${fieldErrors.personaContacto ? "field--error" : ""}`}
+                    >
                       <span>Nombre del contacto</span>
                       <input
                         name="personaContacto"
@@ -507,6 +526,11 @@ export default function ProveedoresPage() {
                         maxLength={180}
                         disabled={guardando}
                       />
+                      {fieldErrors.personaContacto && (
+                        <em className="field-error">
+                          {fieldErrors.personaContacto}
+                        </em>
+                      )}
                     </label>
                   </div>
 

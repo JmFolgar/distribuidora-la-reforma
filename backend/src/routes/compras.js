@@ -13,6 +13,7 @@ import {
   ferMovimientoInventario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { enteroPositivo, montoPositivo } from "../validacion.js";
 
 const router = Router();
 
@@ -31,12 +32,11 @@ const lineaSchema = z.object({
     .number({ invalid_type_error: "Seleccione un producto" })
     .int()
     .positive("Seleccione un producto"),
-  cantidad: z.coerce
-    .number({ invalid_type_error: "La cantidad es obligatoria" })
-    .refine((v) => v > 0, { message: "La cantidad debe ser mayor a 0" }),
-  costoUnitario: z.coerce
-    .number({ invalid_type_error: "El costo es obligatorio" })
-    .refine((v) => v > 0, { message: "El costo debe ser mayor a 0" }),
+  cantidad: enteroPositivo("La cantidad es obligatoria"),
+  costoUnitario: montoPositivo(
+    "El costo es obligatorio",
+    "El costo debe ser mayor a 0"
+  ),
 });
 
 const compraBodySchema = z.object({
