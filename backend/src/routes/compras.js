@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, asc, desc, sql, inArray } from "drizzle-orm";
+import { eq, asc, desc, sql, inArray, and } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import {
@@ -7,6 +7,10 @@ import {
   ferDetalleCompra,
   ferProveedor,
   ferProducto,
+  ferRecepcion,
+  ferDetalleRecepcion,
+  ferInventario,
+  ferMovimientoInventario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
@@ -18,6 +22,9 @@ const ROLES_COMPRAS = ["ADMINISTRADOR", "SUPERVISOR"];
 
 /** En BD la orden recién creada es CREADA; en negocio se muestra como PENDIENTE. */
 const ESTADO_DB_PENDIENTE = "CREADA";
+const ESTADO_DB_RECIBIDA = "RECIBIDA";
+const MOTIVO_RECEPCION = "Recepción de compra";
+const MODULO_ORIGEN_COMPRA = "COMPRAS";
 
 const lineaSchema = z.object({
   idProducto: z.coerce
@@ -89,6 +96,48 @@ function fieldErrorsFromZod(error) {
     if (key && !fields[key]) fields[key] = issue.message;
   }
   return fields;
+}
+
+async function generarNumeroRecepcion(tx) {
+  const year = new Date().getFullYear();
+  const prefix = `REC-${year}-`;
+  const [row] = await tx
+    .select({ numero: ferRecepcion.numeroRecepcion })
+    .from(ferRecepcion)
+    .where(sql`${ferRecepcion.numeroRecepcion} LIKE ${prefix + "%"}`)
+    .orderBy(desc(ferRecepcion.numeroRecepcion))
+    .limit(1);
+
+  let secuencia = 1;
+  if (row?.numero) {
+    const part = row.numero.slice(prefix.length);
+    const parsed = Number.parseInt(part, 10);
+    if (Number.isFinite(parsed)) secuencia = parsed + 1;
+  }
+
+  return `${prefix}${String(secuencia).padStart(5, "0")}`;
+}
+
+async function obtenerInventarioProducto(tx, idProducto) {
+  const [inv] = await tx
+    .select()
+    .from(ferInventario)
+    .where(eq(ferInventario.idProducto, idProducto))
+    .limit(1);
+
+  if (inv) return inv;
+
+  const [creado] = await tx
+    .insert(ferInventario)
+    .values({
+      idProducto,
+      existenciaActual: "0",
+      cantidadReservada: "0",
+      version: 0,
+    })
+    .returning();
+
+  return creado;
 }
 
 async function generarNumeroCompra(tx) {
@@ -218,6 +267,7 @@ async function mapCompraCompleta(compraRow, proveedorNombre) {
     lineas,
     total,
     editable: compraRow.estado === ESTADO_DB_PENDIENTE,
+    puedeRecibir: compraRow.estado === ESTADO_DB_PENDIENTE,
   };
 }
 
@@ -249,6 +299,7 @@ router.get("/", requireRole(...ROLES_COMPRAS), async (_req, res, next) => {
           estado: mapEstadoFromDb(c.estado),
           total: calcularTotalLineas(lineas),
           editable: c.estado === ESTADO_DB_PENDIENTE,
+          puedeRecibir: c.estado === ESTADO_DB_PENDIENTE,
         };
       })
     );
@@ -366,6 +417,209 @@ router.post("/", requireRole(...ROLES_COMPRAS), async (req, res, next) => {
     next(err);
   }
 });
+
+router.post(
+  "/:id/recibir",
+  requireRole(...ROLES_COMPRAS),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Identificador de compra inválido",
+        });
+      }
+
+      const idUsuario = req.user?.sub;
+      if (!idUsuario) {
+        return res.status(401).json({
+          success: false,
+          message: "Sesión no válida",
+        });
+      }
+
+      const resultado = await db.transaction(async (tx) => {
+        const [compra] = await tx
+          .select()
+          .from(ferCompra)
+          .where(eq(ferCompra.id, id))
+          .limit(1);
+
+        if (!compra) {
+          return { error: { status: 404, message: "Compra no encontrada" } };
+        }
+
+        if (compra.estado === ESTADO_DB_RECIBIDA) {
+          return {
+            error: {
+              status: 409,
+              message: "Esta compra ya fue recibida",
+            },
+          };
+        }
+
+        if (compra.estado !== ESTADO_DB_PENDIENTE) {
+          return {
+            error: {
+              status: 409,
+              message: "Solo se pueden recibir compras en estado PENDIENTE",
+            },
+          };
+        }
+
+        const [recepcionExistente] = await tx
+          .select({ id: ferRecepcion.id })
+          .from(ferRecepcion)
+          .where(
+            and(
+              eq(ferRecepcion.idCompra, id),
+              eq(ferRecepcion.estado, "CONFIRMADA")
+            )
+          )
+          .limit(1);
+
+        if (recepcionExistente) {
+          return {
+            error: {
+              status: 409,
+              message: "Esta compra ya fue recibida",
+            },
+          };
+        }
+
+        const detalles = await tx
+          .select()
+          .from(ferDetalleCompra)
+          .where(eq(ferDetalleCompra.idCompra, id))
+          .orderBy(asc(ferDetalleCompra.id));
+
+        if (detalles.length === 0) {
+          return {
+            error: {
+              status: 400,
+              message: "La compra no tiene productos para recibir",
+            },
+          };
+        }
+
+        const numeroRecepcion = await generarNumeroRecepcion(tx);
+
+        const [recepcion] = await tx
+          .insert(ferRecepcion)
+          .values({
+            idCompra: id,
+            numeroRecepcion,
+            estado: "CONFIRMADA",
+            observacion: null,
+          })
+          .returning();
+
+        for (const detalle of detalles) {
+          const cantidad = toNumber(detalle.cantidad);
+          if (cantidad <= 0) {
+            return {
+              error: {
+                status: 400,
+                message: "Hay líneas con cantidad inválida",
+              },
+            };
+          }
+
+          await tx.insert(ferDetalleRecepcion).values({
+            idRecepcion: recepcion.id,
+            idDetalleCompra: detalle.id,
+            cantidadRecibida: String(cantidad),
+            cantidadRechazada: "0",
+            motivoRechazo: null,
+          });
+
+          const inventario = await obtenerInventarioProducto(
+            tx,
+            detalle.idProducto
+          );
+          const anterior = toNumber(inventario.existenciaActual);
+          const nueva = anterior + cantidad;
+
+          await tx
+            .update(ferInventario)
+            .set({
+              existenciaActual: String(nueva),
+              fechaUltimoMovimiento: sql`CURRENT_TIMESTAMP`,
+              version: inventario.version + 1,
+            })
+            .where(eq(ferInventario.id, inventario.id));
+
+          await tx.insert(ferMovimientoInventario).values({
+            idInventario: inventario.id,
+            idUsuario,
+            tipoMovimiento: "ENTRADA",
+            cantidad: String(cantidad),
+            existenciaAnterior: String(anterior),
+            existenciaNueva: String(nueva),
+            moduloOrigen: MODULO_ORIGEN_COMPRA,
+            idRegistroOrigen: compra.id,
+            numeroDocumento: compra.numeroCompra,
+            motivo: MOTIVO_RECEPCION,
+          });
+        }
+
+        const [compraRecibida] = await tx
+          .update(ferCompra)
+          .set({ estado: ESTADO_DB_RECIBIDA })
+          .where(
+            and(eq(ferCompra.id, id), eq(ferCompra.estado, ESTADO_DB_PENDIENTE))
+          )
+          .returning();
+
+        if (!compraRecibida) {
+          return {
+            error: {
+              status: 409,
+              message: "La compra ya no está pendiente de recepción",
+            },
+          };
+        }
+
+        const [proveedor] = await tx
+          .select({ nombre: ferProveedor.razonSocial })
+          .from(ferProveedor)
+          .where(eq(ferProveedor.id, compraRecibida.idProveedor))
+          .limit(1);
+
+        return {
+          compra: compraRecibida,
+          proveedorNombre: proveedor?.nombre ?? "—",
+          recepcion,
+        };
+      });
+
+      if (resultado.error) {
+        const e = resultado.error;
+        return res.status(e.status).json({
+          success: false,
+          message: e.message,
+        });
+      }
+
+      const data = await mapCompraCompleta(
+        resultado.compra,
+        resultado.proveedorNombre
+      );
+
+      res.json({
+        success: true,
+        data: {
+          ...data,
+          numeroRecepcion: resultado.recepcion.numeroRecepcion,
+        },
+        message: "Compra recibida correctamente. El inventario fue actualizado.",
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 router.patch("/:id", requireRole(...ROLES_COMPRAS), async (req, res, next) => {
   try {

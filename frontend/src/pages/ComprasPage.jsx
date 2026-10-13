@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Loader2, PackageCheck, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import {
   createCompra,
@@ -8,6 +8,7 @@ import {
   listProductosActivos,
   listProveedoresActivos,
   updateCompra,
+  recibirCompra,
 } from "../api/client";
 
 function formatMoney(value) {
@@ -115,6 +116,7 @@ export default function ComprasPage() {
   const [formError, setFormError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [cargandoModal, setCargandoModal] = useState(false);
+  const [recibiendo, setRecibiendo] = useState(null);
 
   const comprasFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -265,6 +267,32 @@ export default function ComprasPage() {
     });
   }
 
+  function abrirRecibir(compra) {
+    setRecibiendo(compra);
+    setFormError("");
+  }
+
+  function cerrarRecibir() {
+    if (guardando) return;
+    setRecibiendo(null);
+    setFormError("");
+  }
+
+  async function confirmarRecibir() {
+    if (!recibiendo) return;
+    setGuardando(true);
+    setFormError("");
+    try {
+      await recibirCompra(recibiendo.id);
+      setGuardando(false);
+      setRecibiendo(null);
+      await cargarLista();
+    } catch (err) {
+      setFormError(err.message || "No se pudo recibir la compra");
+      setGuardando(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
@@ -367,19 +395,33 @@ export default function ComprasPage() {
                     </td>
                     <td className="mono">{formatMoney(c.total)}</td>
                     <td>
-                      {c.editable ? (
-                        <button
-                          type="button"
-                          className="btn-action btn-action--edit"
-                          onClick={() => abrirEditar(c)}
-                          title="Editar compra pendiente"
-                        >
-                          <Pencil size={14} strokeWidth={1.75} />
-                          Editar
-                        </button>
-                      ) : (
-                        <span className="cell-muted">—</span>
-                      )}
+                      <div className="row-actions">
+                        {c.editable && (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--edit"
+                            onClick={() => abrirEditar(c)}
+                            title="Editar compra pendiente"
+                          >
+                            <Pencil size={14} strokeWidth={1.75} />
+                            Editar
+                          </button>
+                        )}
+                        {c.puedeRecibir && (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--success"
+                            onClick={() => abrirRecibir(c)}
+                            title="Marcar como recibida"
+                          >
+                            <PackageCheck size={14} strokeWidth={1.75} />
+                            Recibir
+                          </button>
+                        )}
+                        {!c.editable && !c.puedeRecibir && (
+                          <span className="cell-muted">—</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -397,6 +439,66 @@ export default function ComprasPage() {
           </div>
         )}
       </section>
+
+      {recibiendo && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={cerrarRecibir}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="compras-recibir-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-confirm-icon modal-confirm-icon--success" aria-hidden="true">
+              <PackageCheck size={22} strokeWidth={1.75} />
+            </div>
+            <h2 id="compras-recibir-title">Recibir compra</h2>
+            <p className="page-subtitle">
+              ¿Confirmar recepción de la orden{" "}
+              <strong className="mono">{recibiendo.numeroCompra}</strong> del
+              proveedor <strong>{recibiendo.proveedorNombre}</strong>? Se
+              registrará una <strong>ENTRADA</strong> por cada producto y la
+              existencia subirá con las cantidades compradas.
+            </p>
+
+            {formError && (
+              <p className="form-error" role="alert">
+                {formError}
+              </p>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={cerrarRecibir}
+                disabled={guardando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-success btn-inline"
+                onClick={confirmarRecibir}
+                disabled={guardando}
+              >
+                {guardando ? (
+                  <>
+                    <Loader2 size={16} className="spin" />
+                    Recibiendo…
+                  </>
+                ) : (
+                  "Confirmar recepción"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modal === "form" && (
         <div

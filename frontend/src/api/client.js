@@ -202,3 +202,11 @@ export function updateCompra(id, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function recibirCompra(id) {
+  return apiRequest(`/compras/${id}/recibir`, { method: "POST" });
+}
+
+export function listMovimientosInventario() {
+  return apiRequest("/inventario/movimientos");
+}

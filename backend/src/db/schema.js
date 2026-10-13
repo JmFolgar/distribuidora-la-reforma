@@ -224,6 +224,65 @@ export const ferDetalleCompra = pgTable("FER_DETALLE_COMPRA", {
     .default("0"),
 });
 
+export const ferRecepcion = pgTable("FER_RECEPCION", {
+  id: bigint("REC_ID_RECEPCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idCompra: bigint("REC_ID_COMPRA", { mode: "number" }).notNull(),
+  numeroRecepcion: varchar("REC_NUMERO_RECEPCION", { length: 40 }).notNull(),
+  fechaRecepcion: timestamp("REC_FECHA_RECEPCION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  estado: varchar("REC_ESTADO", { length: 20 }).notNull().default("BORRADOR"),
+  observacion: varchar("REC_OBSERVACION", { length: 500 }),
+});
+
+export const ferDetalleRecepcion = pgTable("FER_DETALLE_RECEPCION", {
+  id: bigint("DRE_ID_DETALLE_RECEPCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idRecepcion: bigint("DRE_ID_RECEPCION", { mode: "number" }).notNull(),
+  idDetalleCompra: bigint("DRE_ID_DETALLE_COMPRA", { mode: "number" }).notNull(),
+  cantidadRecibida: numeric("DRE_CANTIDAD_RECIBIDA", {
+    precision: 14,
+    scale: 3,
+  })
+    .notNull()
+    .default("0"),
+  cantidadRechazada: numeric("DRE_CANTIDAD_RECHAZADA", {
+    precision: 14,
+    scale: 3,
+  })
+    .notNull()
+    .default("0"),
+  motivoRechazo: varchar("DRE_MOTIVO_RECHAZO", { length: 300 }),
+});
+
+export const ferMovimientoInventario = pgTable("FER_MOVIMIENTO_INVENTARIO", {
+  id: bigint("MOV_ID_MOVIMIENTO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idInventario: bigint("MOV_ID_INVENTARIO", { mode: "number" }).notNull(),
+  idUsuario: bigint("MOV_ID_USUARIO", { mode: "number" }).notNull(),
+  tipoMovimiento: varchar("MOV_TIPO_MOVIMIENTO", { length: 15 }).notNull(),
+  cantidad: numeric("MOV_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  existenciaAnterior: numeric("MOV_EXISTENCIA_ANTERIOR", {
+    precision: 14,
+    scale: 3,
+  }).notNull(),
+  existenciaNueva: numeric("MOV_EXISTENCIA_NUEVA", {
+    precision: 14,
+    scale: 3,
+  }).notNull(),
+  fechaMovimiento: timestamp("MOV_FECHA_MOVIMIENTO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  moduloOrigen: varchar("MOV_MODULO_ORIGEN", { length: 40 }).notNull(),
+  idRegistroOrigen: bigint("MOV_ID_REGISTRO_ORIGEN", { mode: "number" }).notNull(),
+  numeroDocumento: varchar("MOV_NUMERO_DOCUMENTO", { length: 40 }),
+  motivo: varchar("MOV_MOTIVO", { length: 300 }),
+});
+
 export const ferInventario = pgTable("FER_INVENTARIO", {
   id: bigint("INV_ID_INVENTARIO", { mode: "number" })
     .generatedByDefaultAsIdentity()

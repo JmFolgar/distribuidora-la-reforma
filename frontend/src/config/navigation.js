@@ -86,7 +86,6 @@ export const NAV_GROUPS = [
         path: "/inventario",
         icon: Warehouse,
         roles: ["ADMINISTRADOR", "SUPERVISOR"],
-        soon: true,
       },
     ],
   },
