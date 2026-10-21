@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Search } from "lucide-react";
+import { ImageOff, Loader2, Pencil, Plus, Search, Trash2, UserCheck, X, ZoomIn } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { useAuth } from "../auth/AuthContext";
 import {
+  activarProducto,
   createProducto,
+  eliminarProducto,
   listCategorias,
   listProductos,
+  notificarAlertas,
   updateProducto,
 } from "../api/client";
+import { enteroValido, montoValido } from "../utils/validacion";
 
 const EMPTY_FORM = {
   codigo: "",
@@ -26,7 +30,18 @@ function formatMoney(value) {
   });
 }
 
-function validarFormulario(form, modo) {
+const MAX_IMAGEN = 2 * 1024 * 1024;
+
+function validarImagen(archivo) {
+  if (!archivo) return "";
+  const tipoOk =
+    archivo.type === "image/jpeg" || archivo.type === "image/png";
+  if (!tipoOk) return "La imagen debe ser JPG o PNG";
+  if (archivo.size > MAX_IMAGEN) return "La imagen no puede superar 2 MB";
+  return "";
+}
+
+function validarFormulario(form, modo, imagen) {
   const fields = {};
   if (modo === "crear") {
     if (!form.codigo.trim()) fields.codigo = "El código es obligatorio";
@@ -34,19 +49,21 @@ function validarFormulario(form, modo) {
     if (!form.idCategoria) fields.idCategoria = "Seleccione una categoría";
   }
 
-  const precio = Number(form.precioVenta);
-  if (form.precioVenta === "" || Number.isNaN(precio)) {
+  if (form.precioVenta === "" || form.precioVenta == null) {
     fields.precioVenta = "El precio de venta es obligatorio";
-  } else if (precio <= 0) {
-    fields.precioVenta = "El precio debe ser mayor a 0";
+  } else if (!montoValido(form.precioVenta)) {
+    fields.precioVenta =
+      "El precio debe ser mayor a 0 y tener como máximo 2 decimales";
   }
 
-  const minimo = Number(form.existenciaMinima);
-  if (form.existenciaMinima === "" || Number.isNaN(minimo)) {
+  if (form.existenciaMinima === "" || form.existenciaMinima == null) {
     fields.existenciaMinima = "La existencia mínima es obligatoria";
-  } else if (minimo < 0) {
-    fields.existenciaMinima = "La existencia mínima no puede ser negativa";
+  } else if (!enteroValido(form.existenciaMinima) || Number(form.existenciaMinima) < 0) {
+    fields.existenciaMinima = "Debe ser un número entero igual o mayor a 0";
   }
+
+  const errorImagen = validarImagen(imagen);
+  if (errorImagen) fields.imagen = errorImagen;
 
   return fields;
 }
@@ -66,6 +83,11 @@ export default function ProductosPage() {
   const [formError, setFormError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [confirmacion, setConfirmacion] = useState(null);
+  const [resultado, setResultado] = useState(null);
+  const [imagen, setImagen] = useState(null);
+  const [vistaPrevia, setVistaPrevia] = useState("");
+  const [imagenAmpliada, setImagenAmpliada] = useState(null);
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -99,6 +121,15 @@ export default function ProductosPage() {
     cargar();
   }, [cargar]);
 
+  useEffect(() => {
+    if (!imagenAmpliada) return undefined;
+    function onKey(e) {
+      if (e.key === "Escape") setImagenAmpliada(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [imagenAmpliada]);
+
   function abrirCrear() {
     setModal("crear");
     setEditando(null);
@@ -108,6 +139,8 @@ export default function ProductosPage() {
     });
     setFieldErrors({});
     setFormError("");
+    setImagen(null);
+    setVistaPrevia("");
   }
 
   function abrirEditar(producto) {
@@ -123,6 +156,8 @@ export default function ProductosPage() {
     });
     setFieldErrors({});
     setFormError("");
+    setImagen(null);
+    setVistaPrevia("");
   }
 
   function cerrarModal(forzar = false) {
@@ -132,6 +167,76 @@ export default function ProductosPage() {
     setForm(EMPTY_FORM);
     setFieldErrors({});
     setFormError("");
+    setImagen(null);
+    setVistaPrevia("");
+  }
+
+  function onImagen(e) {
+    const archivo = e.target.files?.[0] || null;
+    setImagen(archivo);
+    setVistaPrevia(archivo ? URL.createObjectURL(archivo) : "");
+    setFieldErrors((prev) => {
+      if (!prev.imagen) return prev;
+      const next = { ...prev };
+      delete next.imagen;
+      return next;
+    });
+    setFormError("");
+  }
+
+  async function confirmarAccion() {
+    if (!confirmacion) return;
+    setGuardando(true);
+    setFormError("");
+    try {
+      let siguiente;
+      if (confirmacion.tipo === "eliminar") {
+        const res = await eliminarProducto(confirmacion.producto.id);
+        const nombre = confirmacion.producto.nombre;
+        siguiente =
+          res.action === "DESACTIVADO"
+            ? {
+                titulo: "Producto desactivado",
+                mensaje: (
+                  <>
+                    No se borró <strong>{nombre}</strong> porque tiene
+                    movimientos. Pasó a inactivo para conservar su historial y
+                    ya no aparece en compras ni pedidos.
+                  </>
+                ),
+              }
+            : {
+                titulo: "Producto eliminado",
+                mensaje: (
+                  <>
+                    <strong>{nombre}</strong> se eliminó de la lista porque
+                    nunca tuvo movimientos.
+                  </>
+                ),
+              };
+      } else {
+        const nombre = confirmacion.producto.nombre;
+        await activarProducto(confirmacion.producto.id);
+        siguiente = {
+          titulo: "Producto reactivado",
+          mensaje: (
+            <>
+              <strong>{nombre}</strong> volvió a estar disponible para elegir
+              en las compras.
+            </>
+          ),
+        };
+      }
+      setGuardando(false);
+      setConfirmacion(null);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      setResultado(siguiente);
+      notificarAlertas();
+      await cargar();
+    } catch (err) {
+      setFormError(err.message || "No se pudo completar la acción");
+      setGuardando(false);
+    }
   }
 
   function onChange(e) {
@@ -149,7 +254,7 @@ export default function ProductosPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
-    const locals = validarFormulario(form, modal);
+    const locals = validarFormulario(form, modal, imagen);
     if (Object.keys(locals).length > 0) {
       setFieldErrors(locals);
       return;
@@ -164,15 +269,16 @@ export default function ProductosPage() {
           idCategoria: Number(form.idCategoria),
           precioVenta: Number(form.precioVenta),
           existenciaMinima: Number(form.existenciaMinima),
-        });
+        }, imagen);
       } else {
         await updateProducto(editando.id, {
           precioVenta: Number(form.precioVenta),
           existenciaMinima: Number(form.existenciaMinima),
-        });
+        }, imagen);
       }
       setGuardando(false);
       cerrarModal(true);
+      notificarAlertas();
       await cargar();
     } catch (err) {
       if (err.body?.fields) {
@@ -235,18 +341,48 @@ export default function ProductosPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>Imagen</th>
                   <th>Código</th>
                   <th>Nombre</th>
                   <th>Categoría</th>
                   <th>Precio venta</th>
                   <th>Existencia</th>
                   <th>Mínimo</th>
+                  <th>Estado</th>
                   {esAdmin && <th>Acciones</th>}
                 </tr>
               </thead>
               <tbody>
                 {productosFiltrados.map((p) => (
                   <tr key={p.id}>
+                    <td>
+                      {p.imagen ? (
+                        <span className="producto-thumb-wrap">
+                          <img
+                            className="producto-thumb"
+                            src={p.imagen}
+                            alt=""
+                          />
+                          <button
+                            type="button"
+                            className="producto-zoom"
+                            aria-label={`Ampliar imagen de ${p.nombre}`}
+                            onClick={() =>
+                              setImagenAmpliada({
+                                src: p.imagen,
+                                nombre: p.nombre,
+                              })
+                            }
+                          >
+                            <ZoomIn size={12} strokeWidth={2} />
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="producto-thumb producto-thumb--empty" aria-hidden>
+                          <ImageOff size={16} strokeWidth={1.75} />
+                        </span>
+                      )}
+                    </td>
                     <td className="mono">{p.codigo}</td>
                     <td>
                       <strong>{p.nombre}</strong>
@@ -261,6 +397,13 @@ export default function ProductosPage() {
                       </span>
                     </td>
                     <td className="mono">{Number(p.existenciaMinima)}</td>
+                    <td>
+                      <span
+                        className={`badge ${p.activo ? "badge--success" : "badge--danger"}`}
+                      >
+                        {p.activo ? "Activo" : "Inactivo"}
+                      </span>
+                    </td>
                     {esAdmin && (
                       <td>
                         <div className="row-actions">
@@ -273,6 +416,31 @@ export default function ProductosPage() {
                             <Pencil size={14} strokeWidth={1.75} />
                             Editar
                           </button>
+                          {p.activo ? (
+                            <button
+                              type="button"
+                              className="btn-action btn-action--danger"
+                              onClick={() => {
+                                setConfirmacion({ tipo: "eliminar", producto: p });
+                                setFormError("");
+                              }}
+                            >
+                              <Trash2 size={14} strokeWidth={1.75} />
+                              Eliminar
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-action btn-action--success"
+                              onClick={() => {
+                                setConfirmacion({ tipo: "reactivar", producto: p });
+                                setFormError("");
+                              }}
+                            >
+                              <UserCheck size={14} strokeWidth={1.75} />
+                              Reactivar
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -280,7 +448,7 @@ export default function ProductosPage() {
                 ))}
                 {productosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={esAdmin ? 7 : 6} className="empty-cell">
+                    <td colSpan={esAdmin ? 9 : 8} className="empty-cell">
                       {productos.length === 0
                         ? "No hay productos registrados."
                         : "No se encontraron productos con esa búsqueda."}
@@ -312,7 +480,7 @@ export default function ProductosPage() {
             <p className="page-subtitle">
               {modal === "crear"
                 ? "Ingresa los datos del producto. La existencia inicia en 0."
-                : "Puedes cambiar el precio y el mínimo. La existencia no se edita a mano."}
+                : "Puedes cambiar el precio, el mínimo y la imagen. La existencia no se edita a mano."}
             </p>
 
             <form className="modal-form" onSubmit={handleSubmit} noValidate>
@@ -454,13 +622,16 @@ export default function ProductosPage() {
                     </span>
                   </span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     name="existenciaMinima"
                     value={form.existenciaMinima}
-                    onChange={onChange}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value !== "" && !/^\d+$/.test(value)) return;
+                      onChange(e);
+                    }}
                     placeholder="Ej. 10"
-                    min="0"
-                    step="1"
                     disabled={guardando}
                     required
                     aria-required="true"
@@ -479,6 +650,57 @@ export default function ProductosPage() {
                   <input value="0" disabled readOnly />
                 </label>
               )}
+
+              <div
+                className={`field ${fieldErrors.imagen ? "field--error" : ""}`}
+              >
+                <span>Imagen</span>
+                {(vistaPrevia || editando?.imagen) && (
+                  <span className="producto-thumb-wrap producto-thumb-wrap--preview">
+                    <img
+                      className="producto-preview"
+                      src={vistaPrevia || editando.imagen}
+                      alt=""
+                    />
+                    <button
+                      type="button"
+                      className="producto-zoom"
+                      aria-label="Ampliar imagen"
+                      onClick={() =>
+                        setImagenAmpliada({
+                          src: vistaPrevia || editando.imagen,
+                          nombre: form.nombre || editando?.nombre || "Producto",
+                        })
+                      }
+                    >
+                      <ZoomIn size={12} strokeWidth={2} />
+                    </button>
+                  </span>
+                )}
+                <div className="file-picker">
+                  <input
+                    id="producto-imagen"
+                    className="file-picker__input"
+                    type="file"
+                    accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                    onChange={onImagen}
+                    disabled={guardando}
+                  />
+                  <label
+                    htmlFor="producto-imagen"
+                    className="file-picker__btn"
+                  >
+                    Seleccionar archivo
+                  </label>
+                  <span className="file-picker__name">
+                    {imagen?.name || "Ningún archivo seleccionado"}
+                  </span>
+                </div>
+                <em className="field-help">JPG o PNG, máximo 2 MB.</em>
+                {fieldErrors.imagen && (
+                  <em className="field-error">{fieldErrors.imagen}</em>
+                )}
+              </div>
 
               {formError && (
                 <p className="form-error" role="alert">
@@ -512,6 +734,130 @@ export default function ProductosPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {resultado && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setResultado(null)}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="producto-resultado-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="producto-resultado-title">{resultado.titulo}</h2>
+            <p className="page-subtitle">{resultado.mensaje}</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-inline"
+                onClick={() => setResultado(null)}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmacion && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => !guardando && setConfirmacion(null)}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="producto-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="producto-confirm-title">
+              {confirmacion.tipo === "eliminar"
+                ? "Eliminar producto"
+                : "Reactivar producto"}
+            </h2>
+            <p className="page-subtitle">
+              {confirmacion.tipo === "eliminar" ? (
+                <>
+                  ¿Eliminar <strong>{confirmacion.producto.nombre}</strong>? Si
+                  nunca tuvo movimientos, se borra de la lista. Si ya tiene
+                  historial, no se borra: pasa a inactivo y deja de aparecer en
+                  compras y pedidos.
+                </>
+              ) : (
+                <>
+                  ¿Reactivar <strong>{confirmacion.producto.nombre}</strong>?
+                  Volverá a estar disponible para elegir en las compras.
+                </>
+              )}
+            </p>
+            {formError && (
+              <p className="form-error" role="alert">
+                {formError}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setConfirmacion(null)}
+                disabled={guardando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`btn btn-inline ${confirmacion.tipo === "eliminar" ? "btn-danger" : "btn-success"}`}
+                onClick={confirmarAccion}
+                disabled={guardando}
+              >
+                {guardando ? (
+                  <>
+                    <Loader2 size={16} className="spin" />
+                    Guardando…
+                  </>
+                ) : confirmacion.tipo === "eliminar" ? (
+                  "Eliminar"
+                ) : (
+                  "Reactivar"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imagenAmpliada && (
+        <div
+          className="modal-backdrop imagen-ampliada-backdrop"
+          role="presentation"
+          onClick={() => setImagenAmpliada(null)}
+        >
+          <figure
+            className="imagen-ampliada"
+            role="dialog"
+            aria-modal="true"
+            aria-label={imagenAmpliada.nombre}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="icon-btn imagen-ampliada__cerrar"
+              aria-label="Cerrar"
+              onClick={() => setImagenAmpliada(null)}
+            >
+              <X size={18} strokeWidth={1.75} />
+            </button>
+            <img src={imagenAmpliada.src} alt={imagenAmpliada.nombre} />
+            <figcaption>{imagenAmpliada.nombre}</figcaption>
+          </figure>
         </div>
       )}
     </AppShell>

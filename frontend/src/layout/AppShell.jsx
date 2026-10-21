@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  Bell,
   ChevronLeft,
   ChevronRight,
   LogOut,
   Search,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import AlertasMenu from "../components/AlertasMenu";
 import NovaMark from "../components/NovaMark";
 import { ETIQUETA_ROL, menuParaRol } from "../config/navigation";
 
@@ -39,7 +39,7 @@ export default function AppShell({ children, title, subtitle, actions }) {
           <NovaMark size={36} />
           {!collapsed && (
             <div className="sidebar__brand-text">
-              <strong>Distribuidora Nova</strong>
+              <strong>Distribuidora La Reforma</strong>
               <span>Panel de gestión</span>
             </div>
           )}
@@ -112,14 +112,8 @@ export default function AppShell({ children, title, subtitle, actions }) {
           </div>
 
           <div className="topbar__actions">
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Alertas"
-              title="Alertas (próximamente)"
-            >
-              <Bell size={18} strokeWidth={1.75} />
-            </button>
+            {(usuario?.rol === "ADMINISTRADOR" ||
+              usuario?.rol === "SUPERVISOR") && <AlertasMenu />}
 
             <div className="user-menu">
               <button

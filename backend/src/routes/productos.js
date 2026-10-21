@@ -9,6 +9,13 @@ import {
   ferInventario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import {
+  borrarImagen,
+  rechazarImagenInvalida,
+  rutaPublica,
+  subirImagen,
+} from "../imagenProducto.js";
+import { enteroNoNegativo, montoPositivo } from "../validacion.js";
 
 const router = Router();
 
@@ -39,22 +46,20 @@ const createSchema = z.object({
     .number({ invalid_type_error: "Seleccione una categoría" })
     .int()
     .positive("Seleccione una categoría"),
-  precioVenta: z.coerce
-    .number({ invalid_type_error: "El precio de venta es obligatorio" })
-    .refine((v) => v > 0, { message: "El precio debe ser mayor a 0" }),
-  existenciaMinima: z.coerce
-    .number({ invalid_type_error: "La existencia mínima es obligatoria" })
-    .min(0, "La existencia mínima no puede ser negativa"),
+  precioVenta: montoPositivo(
+    "El precio de venta es obligatorio",
+    "El precio debe ser mayor a 0"
+  ),
+  existenciaMinima: enteroNoNegativo("La existencia mínima es obligatoria"),
   idUnidadMedida: z.coerce.number().int().positive().optional(),
 });
 
 const updateSchema = z.object({
-  precioVenta: z.coerce
-    .number({ invalid_type_error: "El precio de venta es obligatorio" })
-    .refine((v) => v > 0, { message: "El precio debe ser mayor a 0" }),
-  existenciaMinima: z.coerce
-    .number({ invalid_type_error: "La existencia mínima es obligatoria" })
-    .min(0, "La existencia mínima no puede ser negativa"),
+  precioVenta: montoPositivo(
+    "El precio de venta es obligatorio",
+    "El precio debe ser mayor a 0"
+  ),
+  existenciaMinima: enteroNoNegativo("La existencia mínima es obligatoria"),
 });
 
 async function unidadPorDefecto() {
@@ -95,6 +100,7 @@ function mapProducto(row) {
     existencia,
     stockBajo: existencia < minimo,
     estado: row.estado,
+    imagen: row.imagen || null,
     activo: row.estado === "A",
     fechaCreacion: row.fechaCreacion,
     fechaModificacion: row.fechaModificacion,
@@ -117,6 +123,7 @@ async function productoConInventario(id) {
       precioVenta: ferProducto.precioVenta,
       existenciaMinima: ferProducto.existenciaMinima,
       estado: ferProducto.estado,
+      imagen: ferProducto.imagen,
       fechaCreacion: ferProducto.fechaCreacion,
       fechaModificacion: ferProducto.fechaModificacion,
       existenciaActual: ferInventario.existenciaActual,
@@ -156,46 +163,73 @@ router.get(
   }
 );
 
+async function listarProductosQuery(soloActivos = false) {
+  const condiciones = soloActivos ? eq(ferProducto.estado, "A") : undefined;
+
+  let query = db
+    .select({
+      id: ferProducto.id,
+      codigo: ferProducto.codigo,
+      nombre: ferProducto.nombre,
+      descripcion: ferProducto.descripcion,
+      idCategoria: ferProducto.idCategoria,
+      categoriaNombre: ferCategoria.nombre,
+      idUnidadMedida: ferProducto.idUnidadMedida,
+      unidadNombre: ferUnidadMedida.nombre,
+      unidadAbreviatura: ferUnidadMedida.abreviatura,
+      precioCompra: ferProducto.precioCompra,
+      precioVenta: ferProducto.precioVenta,
+      existenciaMinima: ferProducto.existenciaMinima,
+      estado: ferProducto.estado,
+      imagen: ferProducto.imagen,
+      fechaCreacion: ferProducto.fechaCreacion,
+      fechaModificacion: ferProducto.fechaModificacion,
+      existenciaActual: ferInventario.existenciaActual,
+    })
+    .from(ferProducto)
+    .innerJoin(ferCategoria, eq(ferProducto.idCategoria, ferCategoria.id))
+    .innerJoin(
+      ferUnidadMedida,
+      eq(ferProducto.idUnidadMedida, ferUnidadMedida.id)
+    )
+    .leftJoin(ferInventario, eq(ferInventario.idProducto, ferProducto.id))
+    .orderBy(asc(ferProducto.codigo));
+
+  if (condiciones) {
+    query = query.where(condiciones);
+  }
+
+  return query;
+}
+
+router.get(
+  "/activos",
+  requireRole("ADMINISTRADOR", "SUPERVISOR"),
+  async (_req, res, next) => {
+    try {
+      const rows = await listarProductosQuery(true);
+      res.json({ success: true, data: rows.map(mapProducto) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 router.get("/", requireRole(...ROLES_LECTURA), async (_req, res, next) => {
   try {
-    const rows = await db
-      .select({
-        id: ferProducto.id,
-        codigo: ferProducto.codigo,
-        nombre: ferProducto.nombre,
-        descripcion: ferProducto.descripcion,
-        idCategoria: ferProducto.idCategoria,
-        categoriaNombre: ferCategoria.nombre,
-        idUnidadMedida: ferProducto.idUnidadMedida,
-        unidadNombre: ferUnidadMedida.nombre,
-        unidadAbreviatura: ferUnidadMedida.abreviatura,
-        precioCompra: ferProducto.precioCompra,
-        precioVenta: ferProducto.precioVenta,
-        existenciaMinima: ferProducto.existenciaMinima,
-        estado: ferProducto.estado,
-        fechaCreacion: ferProducto.fechaCreacion,
-        fechaModificacion: ferProducto.fechaModificacion,
-        existenciaActual: ferInventario.existenciaActual,
-      })
-      .from(ferProducto)
-      .innerJoin(ferCategoria, eq(ferProducto.idCategoria, ferCategoria.id))
-      .innerJoin(
-        ferUnidadMedida,
-        eq(ferProducto.idUnidadMedida, ferUnidadMedida.id)
-      )
-      .leftJoin(ferInventario, eq(ferInventario.idProducto, ferProducto.id))
-      .orderBy(asc(ferProducto.codigo));
-
+    const rows = await listarProductosQuery(false);
     res.json({ success: true, data: rows.map(mapProducto) });
   } catch (err) {
     next(err);
   }
 });
 
-router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
+router.post("/", requireRole(...ROLES_ESCRITURA), subirImagen, async (req, res, next) => {
   try {
+    if (rechazarImagenInvalida(req, res)) return;
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
+      if (req.file) borrarImagen(rutaPublica(req.file.filename));
       return res.status(400).json({
         success: false,
         message: "Revise los campos obligatorios",
@@ -220,6 +254,7 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
       .limit(1);
 
     if (codigoExiste) {
+      if (req.file) borrarImagen(rutaPublica(req.file.filename));
       return res.status(409).json({
         success: false,
         code: "CODIGO_DUPLICADO",
@@ -281,6 +316,7 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
         precioVenta: precioVenta.toFixed(2),
         porcentajeImpuesto: "0",
         existenciaMinima: existenciaMinima.toFixed(3),
+        imagen: req.file ? rutaPublica(req.file.filename) : null,
         estado: "A",
       })
       .returning();
@@ -298,6 +334,7 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
       message: "Producto registrado correctamente",
     });
   } catch (err) {
+    if (req.file) borrarImagen(rutaPublica(req.file.filename));
     if (err?.code === "23505") {
       return res.status(409).json({
         success: false,
@@ -310,11 +347,145 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
   }
 });
 
+async function productoTieneHistorial(id) {
+  const result = await db.execute(sql`
+    SELECT (
+      EXISTS (
+        SELECT 1
+        FROM "FER_MOVIMIENTO_INVENTARIO" m
+        INNER JOIN "FER_INVENTARIO" i
+          ON i."INV_ID_INVENTARIO" = m."MOV_ID_INVENTARIO"
+        WHERE i."INV_ID_PRODUCTO" = ${id}
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM "FER_DETALLE_COMPRA"
+        WHERE "DCO_ID_PRODUCTO" = ${id}
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM "FER_DETALLE_PEDIDO"
+        WHERE "DPE_ID_PRODUCTO" = ${id}
+      )
+    ) AS tiene
+  `);
+  return Boolean(result.rows?.[0]?.tiene);
+}
+
+router.delete("/:id", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Identificador de producto inválido",
+      });
+    }
+
+    const [producto] = await db
+      .select()
+      .from(ferProducto)
+      .where(eq(ferProducto.id, id))
+      .limit(1);
+
+    if (!producto) {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado",
+      });
+    }
+
+    const tieneHistorial = await productoTieneHistorial(id);
+
+    if (tieneHistorial) {
+      if (producto.estado !== "I") {
+        await db
+          .update(ferProducto)
+          .set({
+            estado: "I",
+            fechaModificacion: new Date(),
+          })
+          .where(eq(ferProducto.id, id));
+      }
+
+      const data = await productoConInventario(id);
+      return res.json({
+        success: true,
+        action: "DESACTIVADO",
+        data,
+        message:
+          "No se borró el producto porque tiene movimientos. Pasó a inactivo para conservar su historial y ya no se puede elegir en compras ni pedidos.",
+      });
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(ferInventario).where(eq(ferInventario.idProducto, id));
+      await tx.delete(ferProducto).where(eq(ferProducto.id, id));
+    });
+    borrarImagen(producto.imagen);
+
+    res.json({
+      success: true,
+      action: "ELIMINADO",
+      message: "Producto eliminado porque nunca tuvo movimientos",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch(
-  "/:id",
+  "/:id/activar",
   requireRole(...ROLES_ESCRITURA),
   async (req, res, next) => {
     try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Identificador de producto inválido",
+        });
+      }
+
+      const [producto] = await db
+        .select()
+        .from(ferProducto)
+        .where(eq(ferProducto.id, id))
+        .limit(1);
+
+      if (!producto) {
+        return res.status(404).json({
+          success: false,
+          message: "Producto no encontrado",
+        });
+      }
+
+      await db
+        .update(ferProducto)
+        .set({
+          estado: "A",
+          fechaModificacion: new Date(),
+        })
+        .where(eq(ferProducto.id, id));
+
+      res.json({
+        success: true,
+        data: await productoConInventario(id),
+        message: "Producto reactivado. Vuelve a estar disponible en compras y pedidos.",
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.patch(
+  "/:id",
+  requireRole(...ROLES_ESCRITURA),
+  subirImagen,
+  async (req, res, next) => {
+    try {
+      if (rechazarImagenInvalida(req, res)) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) {
         return res.status(400).json({
@@ -340,6 +511,7 @@ router.patch(
 
       const parsed = updateSchema.safeParse(req.body);
       if (!parsed.success) {
+        if (req.file) borrarImagen(rutaPublica(req.file.filename));
         return res.status(400).json({
           success: false,
           message: "Revise los campos obligatorios",
@@ -348,7 +520,7 @@ router.patch(
       }
 
       const [producto] = await db
-        .select({ id: ferProducto.id })
+        .select({ id: ferProducto.id, imagen: ferProducto.imagen })
         .from(ferProducto)
         .where(eq(ferProducto.id, id))
         .limit(1);
@@ -361,15 +533,21 @@ router.patch(
       }
 
       const { precioVenta, existenciaMinima } = parsed.data;
+      const imagenNueva = req.file ? rutaPublica(req.file.filename) : null;
 
       await db
         .update(ferProducto)
         .set({
           precioVenta: precioVenta.toFixed(2),
           existenciaMinima: existenciaMinima.toFixed(3),
+          ...(imagenNueva ? { imagen: imagenNueva } : {}),
           fechaModificacion: new Date(),
         })
         .where(eq(ferProducto.id, id));
+
+      if (imagenNueva && producto.imagen && producto.imagen !== imagenNueva) {
+        borrarImagen(producto.imagen);
+      }
 
       res.json({
         success: true,

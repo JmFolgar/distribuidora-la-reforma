@@ -9,6 +9,12 @@ import {
   listMunicipios,
   updateCliente,
 } from "../api/client";
+import {
+  correoValido,
+  nitValido,
+  nombrePersonaValido,
+  telefonoValido,
+} from "../utils/validacion";
 
 const EMPTY_FORM = {
   nombre: "",
@@ -25,10 +31,6 @@ const EMPTY_FORM = {
   referencia: "",
 };
 
-function correoValido(correo) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
-}
-
 function tieneDetalleDireccion(form) {
   return Boolean(
     form.zona.trim() ||
@@ -43,7 +45,16 @@ function tieneDetalleDireccion(form) {
 function validarFormulario(form) {
   const fields = {};
   if (!form.nombre.trim()) fields.nombre = "El nombre es obligatorio";
+  else if (!nombrePersonaValido(form.nombre)) {
+    fields.nombre = "El nombre solo puede incluir letras";
+  }
   if (!form.nit.trim()) fields.nit = "El NIT es obligatorio";
+  else if (!nitValido(form.nit)) {
+    fields.nit = "El NIT solo puede incluir letras, números y un guion";
+  }
+  if (form.telefono.trim() && !telefonoValido(form.telefono)) {
+    fields.telefono = "El teléfono debe tener 8 dígitos";
+  }
   if (form.correo.trim() && !correoValido(form.correo.trim())) {
     fields.correo = "Correo inválido";
   }

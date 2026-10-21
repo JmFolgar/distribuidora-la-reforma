@@ -18,20 +18,29 @@ async function parseBody(res) {
 }
 
 export async function apiRequest(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
+  const headers = { ...options.headers };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    const err = new Error(
+      "No se pudo conectar con el servidor. Verifique su conexión e intente de nuevo."
+    );
+    err.status = 0;
+    throw err;
+  }
 
   const body = await parseBody(res);
 
@@ -131,16 +140,111 @@ export function listCategorias() {
   return apiRequest("/productos/categorias");
 }
 
-export function createProducto(payload) {
+function productoFormData(payload, imagen) {
+  const data = new FormData();
+  for (const [clave, valor] of Object.entries(payload)) {
+    if (valor != null) data.append(clave, String(valor));
+  }
+  if (imagen) data.append("imagen", imagen);
+  return data;
+}
+
+export function createProducto(payload, imagen) {
   return apiRequest("/productos", {
+    method: "POST",
+    body: productoFormData(payload, imagen),
+  });
+}
+
+export function updateProducto(id, payload, imagen) {
+  return apiRequest(`/productos/${id}`, {
+    method: "PATCH",
+    body: productoFormData(payload, imagen),
+  });
+}
+
+export function eliminarProducto(id) {
+  return apiRequest(`/productos/${id}`, { method: "DELETE" });
+}
+
+export function activarProducto(id) {
+  return apiRequest(`/productos/${id}/activar`, { method: "PATCH" });
+}
+
+export function listProveedores() {
+  return apiRequest("/proveedores");
+}
+
+export function listProveedoresActivos() {
+  return apiRequest("/proveedores/activos");
+}
+
+export function createProveedor(payload) {
+  return apiRequest("/proveedores", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function updateProducto(id, payload) {
-  return apiRequest(`/productos/${id}`, {
+export function desactivarProveedor(id) {
+  return apiRequest(`/proveedores/${id}/desactivar`, { method: "PATCH" });
+}
+
+export function activarProveedor(id) {
+  return apiRequest(`/proveedores/${id}/activar`, { method: "PATCH" });
+}
+
+export function listProductosActivos() {
+  return apiRequest("/productos/activos");
+}
+
+export function listCompras() {
+  return apiRequest("/compras");
+}
+
+export function getCompra(id) {
+  return apiRequest(`/compras/${id}`);
+}
+
+export function createCompra(payload) {
+  return apiRequest("/compras", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCompra(id, payload) {
+  return apiRequest(`/compras/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export function recibirCompra(id) {
+  return apiRequest(`/compras/${id}/recibir`, { method: "POST" });
+}
+
+export function listAlertasInventario() {
+  return apiRequest("/inventario/alertas");
+}
+
+export function crearAjusteInventario(payload) {
+  return apiRequest("/inventario/ajustes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function notificarAlertas() {
+  window.dispatchEvent(new Event("inventario-alertas"));
+}
+
+export function listMovimientosInventario(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));
+  if (filtros.tipo) params.set("tipo", filtros.tipo);
+  if (filtros.fechaDesde) params.set("fechaDesde", filtros.fechaDesde);
+  if (filtros.fechaHasta) params.set("fechaHasta", filtros.fechaHasta);
+  const qs = params.toString();
+  return apiRequest(`/inventario/movimientos${qs ? `?${qs}` : ""}`);
 }

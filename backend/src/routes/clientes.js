@@ -9,6 +9,12 @@ import {
   ferMunicipio,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import {
+  correoOpcionalSchema,
+  esquemaNombrePersona,
+  nitSchema,
+  telefonoOpcionalSchema,
+} from "../validacion.js";
 
 const router = Router();
 
@@ -25,25 +31,10 @@ const optionalText = (max) =>
 
 const clienteSchema = z
   .object({
-    nombre: z.string().trim().min(1, "El nombre es obligatorio").max(180),
-    nit: z.string().trim().min(1, "El NIT es obligatorio").max(20),
-    telefono: optionalText(30),
-    correo: z
-      .string()
-      .trim()
-      .max(254)
-      .optional()
-      .superRefine((val, ctx) => {
-        if (val == null || val === "") return;
-        const check = z.string().email().safeParse(val);
-        if (!check.success) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Correo inválido",
-          });
-        }
-      })
-      .transform((v) => (v === "" || v == null ? undefined : v.toLowerCase())),
+    nombre: esquemaNombrePersona(180),
+    nit: nitSchema,
+    telefono: telefonoOpcionalSchema,
+    correo: correoOpcionalSchema,
     idMunicipio: z
       .union([z.number().int().positive(), z.string(), z.null(), z.undefined()])
       .optional()

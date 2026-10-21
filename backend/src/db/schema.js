@@ -6,6 +6,7 @@ import {
   integer,
   numeric,
   timestamp,
+  date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -141,6 +142,7 @@ export const ferProducto = pgTable("FER_PRODUCTO", {
   codigo: varchar("PRO_CODIGO", { length: 50 }).notNull(),
   nombre: varchar("PRO_NOMBRE", { length: 150 }).notNull(),
   descripcion: varchar("PRO_DESCRIPCION", { length: 500 }),
+  imagen: varchar("PRO_IMAGEN", { length: 300 }),
   precioCompra: numeric("PRO_PRECIO_COMPRA", { precision: 14, scale: 2 })
     .notNull()
     .default("0"),
@@ -166,6 +168,120 @@ export const ferProducto = pgTable("FER_PRODUCTO", {
   })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const ferProveedor = pgTable("FER_PROVEEDOR", {
+  id: bigint("PRV_ID_PROVEEDOR", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idDireccion: bigint("PRV_ID_DIRECCION", { mode: "number" }).notNull(),
+  nit: varchar("PRV_NIT", { length: 20 }).notNull(),
+  razonSocial: varchar("PRV_RAZON_SOCIAL", { length: 180 }).notNull(),
+  nombreContacto: varchar("PRV_NOMBRE_CONTACTO", { length: 180 }),
+  correo: varchar("PRV_CORREO", { length: 254 }).notNull(),
+  telefono: varchar("PRV_TELEFONO", { length: 30 }).notNull(),
+  estado: char("PRV_ESTADO", { length: 1 }).notNull().default("A"),
+  fechaCreacion: timestamp("PRV_FECHA_CREACION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const ferCompra = pgTable("FER_COMPRA", {
+  id: bigint("COM_ID_COMPRA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idProveedor: bigint("COM_ID_PROVEEDOR", { mode: "number" }).notNull(),
+  numeroCompra: varchar("COM_NUMERO_COMPRA", { length: 40 }).notNull(),
+  fechaCompra: timestamp("COM_FECHA_COMPRA", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  fechaEsperada: date("COM_FECHA_ESPERADA"),
+  estado: varchar("COM_ESTADO", { length: 20 }).notNull().default("CREADA"),
+  observacion: varchar("COM_OBSERVACION", { length: 500 }),
+});
+
+export const ferDetalleCompra = pgTable("FER_DETALLE_COMPRA", {
+  id: bigint("DCO_ID_DETALLE_COMPRA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idCompra: bigint("DCO_ID_COMPRA", { mode: "number" }).notNull(),
+  idProducto: bigint("DCO_ID_PRODUCTO", { mode: "number" }).notNull(),
+  cantidad: numeric("DCO_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  costoUnitario: numeric("DCO_COSTO_UNITARIO", {
+    precision: 14,
+    scale: 2,
+  }).notNull(),
+  porcentajeDescuento: numeric("DCO_PORCENTAJE_DESCUENTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  porcentajeImpuesto: numeric("DCO_PORCENTAJE_IMPUESTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+});
+
+export const ferRecepcion = pgTable("FER_RECEPCION", {
+  id: bigint("REC_ID_RECEPCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idCompra: bigint("REC_ID_COMPRA", { mode: "number" }).notNull(),
+  numeroRecepcion: varchar("REC_NUMERO_RECEPCION", { length: 40 }).notNull(),
+  fechaRecepcion: timestamp("REC_FECHA_RECEPCION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  estado: varchar("REC_ESTADO", { length: 20 }).notNull().default("BORRADOR"),
+  observacion: varchar("REC_OBSERVACION", { length: 500 }),
+});
+
+export const ferDetalleRecepcion = pgTable("FER_DETALLE_RECEPCION", {
+  id: bigint("DRE_ID_DETALLE_RECEPCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idRecepcion: bigint("DRE_ID_RECEPCION", { mode: "number" }).notNull(),
+  idDetalleCompra: bigint("DRE_ID_DETALLE_COMPRA", { mode: "number" }).notNull(),
+  cantidadRecibida: numeric("DRE_CANTIDAD_RECIBIDA", {
+    precision: 14,
+    scale: 3,
+  })
+    .notNull()
+    .default("0"),
+  cantidadRechazada: numeric("DRE_CANTIDAD_RECHAZADA", {
+    precision: 14,
+    scale: 3,
+  })
+    .notNull()
+    .default("0"),
+  motivoRechazo: varchar("DRE_MOTIVO_RECHAZO", { length: 300 }),
+});
+
+export const ferMovimientoInventario = pgTable("FER_MOVIMIENTO_INVENTARIO", {
+  id: bigint("MOV_ID_MOVIMIENTO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idInventario: bigint("MOV_ID_INVENTARIO", { mode: "number" }).notNull(),
+  idUsuario: bigint("MOV_ID_USUARIO", { mode: "number" }).notNull(),
+  tipoMovimiento: varchar("MOV_TIPO_MOVIMIENTO", { length: 15 }).notNull(),
+  cantidad: numeric("MOV_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  existenciaAnterior: numeric("MOV_EXISTENCIA_ANTERIOR", {
+    precision: 14,
+    scale: 3,
+  }).notNull(),
+  existenciaNueva: numeric("MOV_EXISTENCIA_NUEVA", {
+    precision: 14,
+    scale: 3,
+  }).notNull(),
+  fechaMovimiento: timestamp("MOV_FECHA_MOVIMIENTO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  moduloOrigen: varchar("MOV_MODULO_ORIGEN", { length: 40 }).notNull(),
+  idRegistroOrigen: bigint("MOV_ID_REGISTRO_ORIGEN", { mode: "number" }).notNull(),
+  numeroDocumento: varchar("MOV_NUMERO_DOCUMENTO", { length: 40 }),
+  motivo: varchar("MOV_MOTIVO", { length: 300 }),
 });
 
 export const ferInventario = pgTable("FER_INVENTARIO", {

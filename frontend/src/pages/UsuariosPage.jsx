@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Eye,
+  EyeOff,
   Filter,
   Loader2,
   Pencil,
@@ -19,6 +21,12 @@ import {
   listUsuarios,
   updateUsuario,
 } from "../api/client";
+import {
+  contrasenaValida,
+  correoValido,
+  MENSAJE_CONTRASENA,
+  nombrePersonaValido,
+} from "../utils/validacion";
 
 const EMPTY_FORM = {
   nombre: "",
@@ -30,12 +38,16 @@ const EMPTY_FORM = {
 function validarFormulario(form, modo) {
   const fields = {};
   if (!form.nombre.trim()) fields.nombre = "El nombre es obligatorio";
+  else if (!nombrePersonaValido(form.nombre)) {
+    fields.nombre = "El nombre solo puede incluir letras";
+  }
   if (!form.rol) fields.rol = "Seleccione un rol";
   if (modo === "crear") {
     if (!form.correo.trim()) fields.correo = "El correo es obligatorio";
+    else if (!correoValido(form.correo)) fields.correo = "Correo inválido";
     if (!form.contrasena) fields.contrasena = "La contraseña es obligatoria";
-    else if (form.contrasena.length < 8) {
-      fields.contrasena = "La contraseña debe tener al menos 8 caracteres";
+    else if (!contrasenaValida(form.contrasena)) {
+      fields.contrasena = MENSAJE_CONTRASENA;
     }
   }
   return fields;
@@ -57,6 +69,7 @@ export default function UsuariosPage() {
   const [busqueda, setBusqueda] = useState("");
   const [rolesFiltro, setRolesFiltro] = useState([]);
   const [filtroAbierto, setFiltroAbierto] = useState(false);
+  const [mostrarClave, setMostrarClave] = useState(false);
 
   const usuariosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -109,6 +122,7 @@ export default function UsuariosPage() {
     setForm(EMPTY_FORM);
     setFieldErrors({});
     setFormError("");
+    setMostrarClave(false);
   }
 
   function abrirEditar(usuario) {
@@ -130,6 +144,7 @@ export default function UsuariosPage() {
     setForm(EMPTY_FORM);
     setFieldErrors({});
     setFormError("");
+    setMostrarClave(false);
   }
 
   function onChange(e) {
@@ -498,7 +513,7 @@ export default function UsuariosPage() {
                 </h2>
                 <p className="page-subtitle">
                   {modal === "crear"
-                    ? "Nombre, correo, contraseña (mín. 8) y rol son obligatorios."
+                    ? "Nombre, correo, contraseña y rol son obligatorios."
                     : "Actualiza el nombre y el rol. El cambio de rol aplica al volver a iniciar sesión."}
                 </p>
 
@@ -543,15 +558,34 @@ export default function UsuariosPage() {
                         className={`field ${fieldErrors.contrasena ? "field--error" : ""}`}
                       >
                         <span>Contraseña</span>
-                        <input
-                          type="password"
-                          name="contrasena"
-                          value={form.contrasena}
-                          onChange={onChange}
-                          placeholder="Mínimo 8 caracteres"
-                          disabled={guardando}
-                          autoComplete="new-password"
-                        />
+                        <div className="field-password">
+                          <input
+                            type={mostrarClave ? "text" : "password"}
+                            name="contrasena"
+                            value={form.contrasena}
+                            onChange={onChange}
+                            placeholder="Mín. 8, mayúscula, número y símbolo"
+                            disabled={guardando}
+                            autoComplete="new-password"
+                          />
+                          <button
+                            type="button"
+                            className="field-password__toggle"
+                            onClick={() => setMostrarClave((v) => !v)}
+                            aria-label={
+                              mostrarClave
+                                ? "Ocultar contraseña"
+                                : "Mostrar contraseña"
+                            }
+                            disabled={guardando}
+                          >
+                            {mostrarClave ? (
+                              <EyeOff size={18} strokeWidth={1.75} />
+                            ) : (
+                              <Eye size={18} strokeWidth={1.75} />
+                            )}
+                          </button>
+                        </div>
                         {fieldErrors.contrasena && (
                           <em className="field-error">
                             {fieldErrors.contrasena}
