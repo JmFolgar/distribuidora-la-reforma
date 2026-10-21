@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Eye, Loader2, Search } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { getVenta, listVentas } from "../api/client";
@@ -27,6 +28,7 @@ function nombreEstado(estado) {
 }
 
 export default function VentasPage() {
+  const navigate = useNavigate();
   const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -121,6 +123,7 @@ export default function VentasPage() {
                   <th>Fecha</th>
                   <th>Estado</th>
                   <th>Total</th>
+                  <th>Saldo</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -135,8 +138,18 @@ export default function VentasPage() {
                       <span className="badge badge--success">{nombreEstado(v.estado)}</span>
                     </td>
                     <td className="mono">{formatMoney(v.total)}</td>
+                    <td className="mono">{formatMoney(v.saldo)}</td>
                     <td>
                       <div className="row-actions">
+                        {Number(v.saldo) > 0 && (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--success"
+                            onClick={() => navigate(`/pagos?venta=${v.id}`)}
+                          >
+                            Pagar
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn-action btn-action--edit"
@@ -151,7 +164,7 @@ export default function VentasPage() {
                 ))}
                 {filtradas.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="empty-cell">
+                    <td colSpan={8} className="empty-cell">
                       {ventas.length === 0
                         ? "Todavía no hay ventas. Se registran desde un pedido aprobado."
                         : "No se encontraron ventas con esa búsqueda."}
@@ -204,6 +217,10 @@ export default function VentasPage() {
                     <dt>Total</dt>
                     <dd className="mono">{formatMoney(detalle.total)}</dd>
                   </div>
+                  <div>
+                    <dt>Saldo</dt>
+                    <dd className="mono">{formatMoney(detalle.saldo)}</dd>
+                  </div>
                 </dl>
 
                 <div className="table-wrap">
@@ -241,6 +258,15 @@ export default function VentasPage() {
                   <button type="button" className="btn-ghost" onClick={() => setDetalle(null)}>
                     Cerrar
                   </button>
+                  {Number(detalle.saldo) > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-inline"
+                      onClick={() => navigate(`/pagos?venta=${detalle.id}`)}
+                    >
+                      Registrar pago
+                    </button>
+                  )}
                 </div>
               </>
             )}

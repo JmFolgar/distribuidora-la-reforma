@@ -19,6 +19,7 @@ import ComprasPage from "./pages/ComprasPage";
 import InventarioPage from "./pages/InventarioPage";
 import PedidosPage from "./pages/PedidosPage";
 import VentasPage from "./pages/VentasPage";
+import PagosPage from "./pages/PagosPage";
 import "./App.css";
 
 /**
@@ -132,6 +133,18 @@ export default function App() {
                   roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
                 >
                   <VentasPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pagos"
+            element={
+              <ProtectedRoute>
+                <RoleRoute
+                  roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
+                >
+                  <PagosPage />
                 </RoleRoute>
               </ProtectedRoute>
             }

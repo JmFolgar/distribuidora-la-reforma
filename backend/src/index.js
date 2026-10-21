@@ -14,6 +14,7 @@ import comprasRouter from "./routes/compras.js";
 import inventarioRouter from "./routes/inventario.js";
 import pedidosRouter from "./routes/pedidos.js";
 import ventasRouter from "./routes/ventas.js";
+import pagosRouter from "./routes/pagos.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -47,6 +48,7 @@ app.use("/api/compras", comprasRouter);
 app.use("/api/inventario", inventarioRouter);
 app.use("/api/pedidos", pedidosRouter);
 app.use("/api/ventas", ventasRouter);
+app.use("/api/pagos", pagosRouter);
 
 app.use(notFound);
 app.use(errorHandler);

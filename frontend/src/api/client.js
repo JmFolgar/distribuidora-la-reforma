@@ -287,6 +287,21 @@ export function createVenta(payload) {
   });
 }
 
+export function listPagos() {
+  return apiRequest("/pagos");
+}
+
+export function listMetodosPago() {
+  return apiRequest("/pagos/metodos");
+}
+
+export function createPago(payload) {
+  return apiRequest("/pagos", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listMovimientosInventario(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));

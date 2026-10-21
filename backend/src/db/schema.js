@@ -458,3 +458,29 @@ export const ferDetalleVenta = pgTable("FER_DETALLE_VENTA", {
     .notNull()
     .default("0"),
 });
+
+export const ferMetodoPago = pgTable("FER_METODO_PAGO", {
+  id: bigint("MPA_ID_METODO_PAGO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  codigo: varchar("MPA_CODIGO", { length: 30 }).notNull(),
+  nombre: varchar("MPA_NOMBRE", { length: 80 }).notNull(),
+  requiereReferencia: boolean("MPA_REQUIERE_REFERENCIA").notNull().default(false),
+  estado: char("MPA_ESTADO", { length: 1 }).notNull().default("A"),
+});
+
+export const ferPago = pgTable("FER_PAGO", {
+  id: bigint("PAG_ID_PAGO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idVenta: bigint("PAG_ID_VENTA", { mode: "number" }).notNull(),
+  idMetodoPago: bigint("PAG_ID_METODO_PAGO", { mode: "number" }).notNull(),
+  numeroPago: varchar("PAG_NUMERO_PAGO", { length: 40 }).notNull(),
+  fechaPago: timestamp("PAG_FECHA_PAGO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  monto: numeric("PAG_MONTO", { precision: 14, scale: 2 }).notNull(),
+  referencia: varchar("PAG_REFERENCIA", { length: 100 }),
+  estado: varchar("PAG_ESTADO", { length: 15 }).notNull().default("REGISTRADO"),
+  observacion: varchar("PAG_OBSERVACION", { length: 500 }),
+});

@@ -56,7 +56,6 @@ export const NAV_GROUPS = [
         path: "/pagos",
         icon: Wallet,
         roles: ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"],
-        soon: true,
       },
     ],
   },

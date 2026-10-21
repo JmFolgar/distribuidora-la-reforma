@@ -146,8 +146,9 @@ async function lineasDeVentas(ids) {
   return mapa;
 }
 
-function mapVenta(row, lineas) {
+function mapVenta(row, lineas, pagado = 0) {
   const montos = totales(lineas, row.porcentajeDescuento);
+  const abonado = roundMoney(pagado);
   return {
     id: row.id,
     numeroVenta: row.numeroFactura,
@@ -159,8 +160,27 @@ function mapVenta(row, lineas) {
     porcentajeDescuento: toNumber(row.porcentajeDescuento),
     editable: false,
     ...montos,
+    pagado: abonado,
+    saldo: roundMoney(montos.total - abonado),
     lineas,
   };
+}
+
+async function pagadoPorVenta(ids) {
+  const mapa = new Map();
+  if (!ids.length) return mapa;
+  const rows = await db.execute(sql`
+    SELECT "PAG_ID_VENTA" AS id, COALESCE(SUM("PAG_MONTO"), 0)::float AS pagado
+    FROM "FER_PAGO"
+    WHERE "PAG_ESTADO" = 'REGISTRADO'
+      AND "PAG_ID_VENTA" IN (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `
+      )})
+    GROUP BY "PAG_ID_VENTA"
+  `);
+  for (const row of rows.rows) mapa.set(Number(row.id), toNumber(row.pagado));
+  return mapa;
 }
 
 const ventaSelect = {
@@ -189,16 +209,21 @@ async function ventaCompleta(id) {
   const [row] = await consultaVenta().where(eq(ferVenta.id, id)).limit(1);
   if (!row) return null;
   const detalles = await lineasDeVentas([id]);
-  return mapVenta(row, detalles.get(id) || []);
+  const pagado = await pagadoPorVenta([id]);
+  return mapVenta(row, detalles.get(id) || [], pagado.get(id) || 0);
 }
 
 router.get("/", requireRole(...ROLES), async (_req, res, next) => {
   try {
     const rows = await consultaVenta().orderBy(desc(ferVenta.id));
-    const detalles = await lineasDeVentas(rows.map((row) => row.id));
+    const ids = rows.map((row) => row.id);
+    const detalles = await lineasDeVentas(ids);
+    const pagado = await pagadoPorVenta(ids);
     res.json({
       success: true,
-      data: rows.map((row) => mapVenta(row, detalles.get(row.id) || [])),
+      data: rows.map((row) =>
+        mapVenta(row, detalles.get(row.id) || [], pagado.get(row.id) || 0)
+      ),
     });
   } catch (error) {
     next(error);
