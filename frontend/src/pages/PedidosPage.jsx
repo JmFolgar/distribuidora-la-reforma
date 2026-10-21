@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
+import { useAuth } from "../auth/AuthContext";
 import {
+  aprobarPedido,
   createPedido,
   getPedido,
   listClientes,
   listPedidos,
   listProductos,
+  rechazarPedido,
   updatePedido,
 } from "../api/client";
 import { enteroValido } from "../utils/validacion";
@@ -128,6 +131,15 @@ function estadoBadgeClass(estado) {
 }
 
 export default function PedidosPage() {
+  const { usuario } = useAuth();
+  const rolesUsuario = usuario?.roles?.length
+    ? usuario.roles
+    : usuario?.rol
+      ? [usuario.rol]
+      : [];
+  const puedeDecidir = rolesUsuario.some(
+    (rol) => rol === "SUPERVISOR" || rol === "ADMINISTRADOR"
+  );
   const [pedidos, setPedidos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -146,6 +158,13 @@ export default function PedidosPage() {
   const [formError, setFormError] = useState("");
   const [guardando, setGuardando] = useState(null);
   const [cargandoModal, setCargandoModal] = useState(false);
+  const [revision, setRevision] = useState(null);
+  const [cargandoRevision, setCargandoRevision] = useState(false);
+  const [rechazando, setRechazando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [motivoError, setMotivoError] = useState("");
+  const [revisionError, setRevisionError] = useState("");
+  const [resolviendo, setResolviendo] = useState(false);
 
   const pedidosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -314,6 +333,68 @@ export default function PedidosPage() {
     }
   }
 
+  function cerrarRevision(forzar = false) {
+    if (resolviendo && !forzar) return;
+    setRevision(null);
+    setRechazando(false);
+    setMotivo("");
+    setMotivoError("");
+    setRevisionError("");
+  }
+
+  async function abrirRevision(pedido) {
+    setRevision(pedido);
+    setRechazando(false);
+    setMotivo("");
+    setMotivoError("");
+    setRevisionError("");
+    setCargandoRevision(true);
+    try {
+      const res = await getPedido(pedido.id);
+      setRevision(res.data);
+    } catch (err) {
+      setRevisionError(err.message || "No se pudo abrir el pedido");
+    } finally {
+      setCargandoRevision(false);
+    }
+  }
+
+  async function aprobar() {
+    if (!revision) return;
+    setResolviendo(true);
+    setRevisionError("");
+    try {
+      await aprobarPedido(revision.id);
+      setResolviendo(false);
+      cerrarRevision(true);
+      await cargarLista();
+    } catch (err) {
+      setRevisionError(err.message || "No se pudo aprobar el pedido");
+      setResolviendo(false);
+    }
+  }
+
+  async function rechazar() {
+    const texto = motivo.trim();
+    if (!texto) {
+      setMotivoError("Escriba por qué rechaza el pedido");
+      return;
+    }
+    setResolviendo(true);
+    setRevisionError("");
+    setMotivoError("");
+    try {
+      await rechazarPedido(revision.id, texto);
+      setResolviendo(false);
+      cerrarRevision(true);
+      await cargarLista();
+    } catch (err) {
+      if (err.body?.fields?.motivo) setMotivoError(err.body.fields.motivo);
+      setRevisionError(err.message || "No se pudo rechazar el pedido");
+      setResolviendo(false);
+    }
+  }
+
   return (
     <AppShell
       title="Pedidos"
@@ -394,7 +475,14 @@ export default function PedidosPage() {
                             Editar
                           </button>
                         ) : (
-                          <span className="cell-muted">—</span>
+                          <button
+                            type="button"
+                            className={`btn-action ${p.estado === "PENDIENTE_APROBACION" ? "btn-action--warning" : "btn-action--edit"}`}
+                            onClick={() => abrirRevision(p)}
+                          >
+                            <Eye size={14} strokeWidth={1.75} />
+                            {p.estado === "PENDIENTE_APROBACION" ? "Revisar" : "Ver"}
+                          </button>
                         )}
                       </div>
                     </td>
@@ -683,6 +771,191 @@ export default function PedidosPage() {
                   </button>
                 </div>
               </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {revision && (
+        <div className="modal-backdrop" role="presentation" onClick={cerrarRevision}>
+          <div
+            className="modal modal--compra modal--fit"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pedido-revision-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="pedido-revision-title">
+              {revision.estado === "PENDIENTE_APROBACION" ? "Revisar pedido" : "Pedido"}
+            </h2>
+            <div className="pedido-revision__intro">
+              <p className="pedido-revision__numero mono">{revision.numeroPedido}</p>
+              {revision.estado === "PENDIENTE_APROBACION" && (
+                <p className="page-subtitle">
+                  Revisa el cliente, los productos y el descuento antes de decidir.
+                </p>
+              )}
+            </div>
+
+            {cargandoRevision ? (
+              <p className="status-pending">
+                <Loader2 size={16} className="spin" /> Cargando…
+              </p>
+            ) : (
+              <>
+                <dl className="pedido-ficha">
+                  <div>
+                    <dt>Cliente</dt>
+                    <dd>{revision.clienteNombre}</dd>
+                  </div>
+                  <div>
+                    <dt>Creado por</dt>
+                    <dd>{revision.creadoPor || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Descuento</dt>
+                    <dd className="mono">{Number(revision.porcentajeDescuento)}%</dd>
+                  </div>
+                  <div>
+                    <dt>Total</dt>
+                    <dd className="mono">{formatMoney(revision.total)}</dd>
+                  </div>
+                  {revision.resueltoPor && (
+                    <div>
+                      <dt>{revision.estado === "CANCELADO" ? "Rechazado por" : "Aprobado por"}</dt>
+                      <dd>{revision.resueltoPor}</dd>
+                    </div>
+                  )}
+                  {revision.motivo && (
+                    <div className="pedido-ficha__ancho">
+                      <dt>Motivo</dt>
+                      <dd>{revision.motivo}</dd>
+                    </div>
+                  )}
+                </dl>
+
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio</th>
+                        <th>Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(revision.lineas || []).map((linea) => (
+                        <tr key={linea.id}>
+                          <td>
+                            {linea.codigo} — {linea.nombre}
+                          </td>
+                          <td className="mono">{linea.cantidad}</td>
+                          <td className="mono">{formatMoney(linea.precioUnitario)}</td>
+                          <td className="mono">{formatMoney(linea.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {revision.estado === "PENDIENTE_APROBACION" && !puedeDecidir && (
+                  <p className="field-help">
+                    Este pedido espera autorización. Solo un supervisor puede aprobarlo o rechazarlo.
+                  </p>
+                )}
+
+                {puedeDecidir && revision.estado === "PENDIENTE_APROBACION" && rechazando && (
+                  <label className={`field ${motivoError ? "field--error" : ""}`}>
+                    <span>
+                      Motivo
+                      <span className="field-required" aria-hidden="true">*</span>
+                    </span>
+                    <textarea
+                      value={motivo}
+                      rows={3}
+                      maxLength={500}
+                      disabled={resolviendo}
+                      placeholder="Por qué no se acepta este descuento"
+                      onChange={(e) => {
+                        setMotivo(e.target.value);
+                        setMotivoError("");
+                      }}
+                    />
+                    {motivoError ? (
+                      <em className="field-error">{motivoError}</em>
+                    ) : (
+                      <span className="field-help">
+                        El pedido quedará cancelado con este motivo.
+                      </span>
+                    )}
+                  </label>
+                )}
+
+                {revisionError && (
+                  <p className="form-error" role="alert">
+                    {revisionError}
+                  </p>
+                )}
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={cerrarRevision}
+                    disabled={resolviendo}
+                  >
+                    {puedeDecidir && revision.estado === "PENDIENTE_APROBACION" ? "Cancelar" : "Cerrar"}
+                  </button>
+                  {puedeDecidir && revision.estado === "PENDIENTE_APROBACION" && !rechazando && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-inline"
+                        disabled={resolviendo}
+                        onClick={() => {
+                          setRechazando(true);
+                          setRevisionError("");
+                        }}
+                      >
+                        Rechazar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-success btn-inline"
+                        disabled={resolviendo}
+                        onClick={aprobar}
+                      >
+                        {resolviendo ? (
+                          <>
+                            <Loader2 size={16} className="spin" />
+                            Aprobando…
+                          </>
+                        ) : (
+                          "Aprobar"
+                        )}
+                      </button>
+                    </>
+                  )}
+                  {puedeDecidir && revision.estado === "PENDIENTE_APROBACION" && rechazando && (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-inline"
+                      disabled={resolviendo}
+                      onClick={rechazar}
+                    >
+                      {resolviendo ? (
+                        <>
+                          <Loader2 size={16} className="spin" />
+                          Rechazando…
+                        </>
+                      ) : (
+                        "Confirmar rechazo"
+                      )}
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

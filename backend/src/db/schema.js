@@ -8,6 +8,7 @@ import {
   timestamp,
   date,
   boolean,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -402,4 +403,22 @@ export const ferAprobacion = pgTable("FER_APROBACION", {
     .default(sql`CURRENT_TIMESTAMP`),
   fechaRespuesta: timestamp("APR_FECHA_RESPUESTA", { withTimezone: true }),
   observacion: varchar("APR_OBSERVACION", { length: 500 }),
+});
+
+export const ferAuditoria = pgTable("FER_AUDITORIA", {
+  id: bigint("AUD_ID_AUDITORIA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idUsuario: bigint("AUD_ID_USUARIO", { mode: "number" }).notNull(),
+  fechaEvento: timestamp("AUD_FECHA_EVENTO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  modulo: varchar("AUD_MODULO", { length: 60 }).notNull(),
+  accion: varchar("AUD_ACCION", { length: 60 }).notNull(),
+  entidad: varchar("AUD_ENTIDAD", { length: 80 }).notNull(),
+  idRegistro: bigint("AUD_ID_REGISTRO", { mode: "number" }).notNull(),
+  valorAnterior: jsonb("AUD_VALOR_ANTERIOR"),
+  valorNuevo: jsonb("AUD_VALOR_NUEVO"),
+  resultado: varchar("AUD_RESULTADO", { length: 10 }).notNull(),
+  mensaje: varchar("AUD_MENSAJE", { length: 500 }),
 });

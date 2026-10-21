@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   ferAprobacion,
+  ferAuditoria,
   ferCliente,
   ferDetallePedido,
   ferEstadoPedido,
@@ -11,6 +12,7 @@ import {
   ferInventario,
   ferPedido,
   ferProducto,
+  ferUsuario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { enteroPositivo } from "../validacion.js";
@@ -20,6 +22,7 @@ const router = Router();
 router.use(requireAuth);
 
 const ROLES = ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"];
+const ROLES_APROBACION = ["ADMINISTRADOR", "SUPERVISOR"];
 
 /** Porcentaje de descuento que se puede aplicar sin que un supervisor lo autorice. */
 export const PORCENTAJE_MAXIMO_SIN_APROBACION = 10;
@@ -27,6 +30,7 @@ export const PORCENTAJE_MAXIMO_SIN_APROBACION = 10;
 const ESTADO_CREADO = "CREADO";
 const ESTADO_PENDIENTE = "PENDIENTE_APROBACION";
 const ESTADO_APROBADO = "APROBADO";
+const ESTADO_CANCELADO = "CANCELADO";
 
 const porcentajeSchema = z.preprocess(
   (v) => (v == null || v === "" ? 0 : v),
@@ -73,6 +77,12 @@ function roundMoney(n) {
 function nombreCliente(row) {
   if (row.tipoPersona === "JURIDICA" && row.razonSocial) return row.razonSocial;
   return [row.primerNombre, row.primerApellido].filter(Boolean).join(" ");
+}
+
+function nombrePersona(row) {
+  if (!row) return null;
+  const nombre = [row.primerNombre, row.primerApellido].filter(Boolean).join(" ");
+  return nombre || null;
 }
 
 function textoDisponibles(existencia) {
@@ -283,7 +293,7 @@ async function lineasDePedidos(ids) {
   return porPedido;
 }
 
-function mapPedido(row, lineas) {
+function mapPedido(row, lineas, extra = {}) {
   const porcentaje = toNumber(row.porcentajeDescuento);
   const montos = totales(lineas, porcentaje);
   return {
@@ -296,9 +306,73 @@ function mapPedido(row, lineas) {
     porcentajeDescuento: porcentaje,
     fechaPedido: row.fechaPedido,
     editable: row.estadoCodigo === ESTADO_CREADO,
+    creadoPor: extra.creadoPor ?? null,
+    resueltoPor: extra.resueltoPor ?? null,
+    motivo: extra.motivo ?? null,
     ...montos,
     lineas,
   };
+}
+
+async function contextoPedidos(ids) {
+  const mapa = new Map();
+  if (!ids.length) return mapa;
+  for (const id of ids) {
+    mapa.set(id, { creadoPor: null, resueltoPor: null, motivo: null });
+  }
+
+  const historias = await db
+    .select({
+      idPedido: ferHistorialPedido.idPedido,
+      primerNombre: ferUsuario.primerNombre,
+      primerApellido: ferUsuario.primerApellido,
+    })
+    .from(ferHistorialPedido)
+    .innerJoin(ferUsuario, eq(ferHistorialPedido.idUsuario, ferUsuario.id))
+    .where(
+      and(
+        inArray(ferHistorialPedido.idPedido, ids),
+        isNull(ferHistorialPedido.idEstadoAnterior)
+      )
+    )
+    .orderBy(asc(ferHistorialPedido.id));
+
+  for (const row of historias) {
+    const actual = mapa.get(row.idPedido);
+    if (actual && !actual.creadoPor) actual.creadoPor = nombrePersona(row);
+  }
+
+  const aprobaciones = await db
+    .select({
+      idPedido: ferAprobacion.idPedido,
+      estado: ferAprobacion.estado,
+      observacion: ferAprobacion.observacion,
+      primerNombre: ferUsuario.primerNombre,
+      primerApellido: ferUsuario.primerApellido,
+    })
+    .from(ferAprobacion)
+    .leftJoin(ferUsuario, eq(ferAprobacion.idUsuarioAutoriza, ferUsuario.id))
+    .where(inArray(ferAprobacion.idPedido, ids))
+    .orderBy(asc(ferAprobacion.id));
+
+  for (const row of aprobaciones) {
+    const actual = mapa.get(row.idPedido);
+    if (!actual) continue;
+    if (row.estado === "RECHAZADA") actual.motivo = row.observacion;
+    if (row.estado === "APROBADA" || row.estado === "RECHAZADA") {
+      actual.resueltoPor = nombrePersona(row);
+    }
+  }
+
+  return mapa;
+}
+
+async function pedidoCompleto(id) {
+  const [row] = await consultaPedido().where(eq(ferPedido.id, id)).limit(1);
+  if (!row) return null;
+  const detalles = await lineasDePedidos([id]);
+  const contexto = await contextoPedidos([id]);
+  return mapPedido(row, detalles.get(id) || [], contexto.get(id));
 }
 
 const pedidoSelect = {
@@ -344,16 +418,15 @@ router.get("/:id", requireRole(...ROLES), async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Pedido no válido" });
     }
 
-    const [row] = await consultaPedido().where(eq(ferPedido.id, id)).limit(1);
-    if (!row) {
+    const data = await pedidoCompleto(id);
+    if (!data) {
       return res.status(404).json({ success: false, message: "Pedido no encontrado" });
     }
 
-    const detalles = await lineasDePedidos([id]);
     res.json({
       success: true,
       porcentajeMaximoSinAprobacion: PORCENTAJE_MAXIMO_SIN_APROBACION,
-      data: mapPedido(row, detalles.get(id) || []),
+      data,
     });
   } catch (error) {
     next(error);
@@ -558,6 +631,199 @@ router.patch("/:id", requireRole(...ROLES), async (req, res, next) => {
       success: true,
       data: mapPedido(row, detalles.get(id) || []),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const motivoSchema = z.object({
+  motivo: z.preprocess(
+    (v) => (v == null ? "" : v),
+    z
+      .string()
+      .trim()
+      .min(1, "Escriba por qué rechaza el pedido")
+      .max(500, "El motivo no puede tener más de 500 caracteres")
+  ),
+});
+
+async function resolverPedido(tx, { id, aprobar, motivo, usuarioId }) {
+  const [pedido] = await tx
+    .select({
+      id: ferPedido.id,
+      numeroPedido: ferPedido.numeroPedido,
+      porcentajeDescuento: ferPedido.porcentajeDescuento,
+      estadoCodigo: ferEstadoPedido.codigo,
+      idEstadoPedido: ferPedido.idEstadoPedido,
+    })
+    .from(ferPedido)
+    .innerJoin(ferEstadoPedido, eq(ferPedido.idEstadoPedido, ferEstadoPedido.id))
+    .where(eq(ferPedido.id, id))
+    .limit(1);
+
+  if (!pedido) {
+    return { error: { status: 404, message: "Pedido no encontrado" } };
+  }
+  if (pedido.estadoCodigo !== ESTADO_PENDIENTE) {
+    return {
+      error: {
+        status: 400,
+        message: "Solo se puede decidir un pedido que está pendiente de aprobación",
+      },
+    };
+  }
+
+  const [solicitud] = await tx
+    .select()
+    .from(ferAprobacion)
+    .where(
+      and(eq(ferAprobacion.idPedido, id), eq(ferAprobacion.estado, "PENDIENTE"))
+    )
+    .limit(1);
+
+  if (!solicitud) {
+    return {
+      error: {
+        status: 400,
+        message: "Este pedido no tiene una autorización pendiente",
+      },
+    };
+  }
+
+  const catalogo = await estadosPorCodigo(tx);
+  const destino = aprobar ? catalogo[ESTADO_APROBADO] : catalogo[ESTADO_CANCELADO];
+  const origen = catalogo[ESTADO_PENDIENTE];
+  if (!destino || !origen) {
+    return {
+      error: {
+        status: 500,
+        message: "Faltan los estados del pedido en la base de datos",
+      },
+    };
+  }
+
+  const [usuario] = await tx
+    .select({
+      primerNombre: ferUsuario.primerNombre,
+      primerApellido: ferUsuario.primerApellido,
+    })
+    .from(ferUsuario)
+    .where(eq(ferUsuario.id, usuarioId))
+    .limit(1);
+  const quien = nombrePersona(usuario) || "Usuario";
+
+  await tx
+    .update(ferPedido)
+    .set({
+      idEstadoPedido: destino.id,
+      ...(aprobar ? {} : { observacion: motivo }),
+    })
+    .where(eq(ferPedido.id, id));
+
+  await tx
+    .update(ferAprobacion)
+    .set({
+      estado: aprobar ? "APROBADA" : "RECHAZADA",
+      idUsuarioAutoriza: usuarioId,
+      fechaRespuesta: new Date(),
+      observacion: aprobar ? solicitud.observacion : motivo,
+    })
+    .where(eq(ferAprobacion.id, solicitud.id));
+
+  await tx.insert(ferHistorialPedido).values({
+    idPedido: id,
+    idEstadoAnterior: origen.id,
+    idEstadoNuevo: destino.id,
+    idUsuario: usuarioId,
+    observacion: aprobar ? "Pedido aprobado" : motivo,
+  });
+
+  await tx.insert(ferAuditoria).values({
+    idUsuario: usuarioId,
+    modulo: "PEDIDOS",
+    accion: aprobar ? "APROBAR" : "RECHAZAR",
+    entidad: "FER_PEDIDO",
+    idRegistro: id,
+    valorAnterior: {
+      estado: ESTADO_PENDIENTE,
+      descuento: toNumber(pedido.porcentajeDescuento),
+    },
+    valorNuevo: {
+      estado: destino.codigo,
+      resueltoPor: quien,
+      motivo: aprobar ? null : motivo,
+    },
+    resultado: "EXITO",
+    mensaje: (aprobar
+      ? `${quien} aprobó el pedido ${pedido.numeroPedido}`
+      : `${quien} rechazó el pedido ${pedido.numeroPedido}: ${motivo}`
+    ).slice(0, 500),
+  });
+
+  return { ok: true };
+}
+
+router.post("/:id/aprobar", requireRole(...ROLES_APROBACION), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: "Pedido no válido" });
+    }
+
+    const resultado = await db.transaction((tx) =>
+      resolverPedido(tx, {
+        id,
+        aprobar: true,
+        usuarioId: Number(req.user.sub),
+      })
+    );
+
+    if (resultado.error) {
+      return res.status(resultado.error.status).json({
+        success: false,
+        message: resultado.error.message,
+      });
+    }
+
+    res.json({ success: true, data: await pedidoCompleto(id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/rechazar", requireRole(...ROLES_APROBACION), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: "Pedido no válido" });
+    }
+
+    const parsed = motivoSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Escriba por qué rechaza el pedido",
+        fields: { motivo: parsed.error.issues[0]?.message },
+      });
+    }
+
+    const resultado = await db.transaction((tx) =>
+      resolverPedido(tx, {
+        id,
+        aprobar: false,
+        motivo: parsed.data.motivo,
+        usuarioId: Number(req.user.sub),
+      })
+    );
+
+    if (resultado.error) {
+      return res.status(resultado.error.status).json({
+        success: false,
+        message: resultado.error.message,
+      });
+    }
+
+    res.json({ success: true, data: await pedidoCompleto(id) });
   } catch (error) {
     next(error);
   }
