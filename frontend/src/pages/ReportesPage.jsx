@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
-import { reporteVentas } from "../api/client";
+import { reporteProductosBajoMinimo, reporteVentas } from "../api/client";
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString("es-GT", {
@@ -9,6 +9,12 @@ function formatMoney(value) {
     currency: "GTQ",
     minimumFractionDigits: 2,
   });
+}
+
+function formatCantidad(value) {
+  const n = Number(value || 0);
+  if (Number.isInteger(n)) return String(n);
+  return n.toLocaleString("es-GT", { maximumFractionDigits: 3 });
 }
 
 function formatFecha(iso) {
@@ -39,11 +45,16 @@ function fechaCalendarioValida(value) {
 }
 
 export default function ReportesPage() {
+  const [tipo, setTipo] = useState("ventas");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [error, setError] = useState("");
   const [generando, setGenerando] = useState(false);
   const [reporte, setReporte] = useState(null);
+  const [minimos, setMinimos] = useState(null);
+  const [cargandoMinimos, setCargandoMinimos] = useState(false);
+  const [errorMinimos, setErrorMinimos] = useState("");
+  const [aperturaMinimos, setAperturaMinimos] = useState(0);
 
   function validar(inicio, fin) {
     if (!inicio || !fin) return "Indique la fecha inicial y la fecha final";
@@ -96,6 +107,28 @@ export default function ReportesPage() {
     setReporte(null);
   }
 
+  useEffect(() => {
+    if (tipo !== "minimos") return undefined;
+    let activo = true;
+    setCargandoMinimos(true);
+    setErrorMinimos("");
+    reporteProductosBajoMinimo()
+      .then((res) => {
+        if (activo) setMinimos(res.data.productos);
+      })
+      .catch((err) => {
+        if (!activo) return;
+        setMinimos([]);
+        setErrorMinimos(err.message || "No se pudo cargar el reporte");
+      })
+      .finally(() => {
+        if (activo) setCargandoMinimos(false);
+      });
+    return () => {
+      activo = false;
+    };
+  }, [tipo, aperturaMinimos]);
+
   async function generar(event) {
     event.preventDefault();
     const mensaje = validar(desde, hasta);
@@ -120,8 +153,37 @@ export default function ReportesPage() {
   return (
     <AppShell
       title="Reportes"
-      subtitle="Elige el periodo y genera el reporte para ver cuánto se vendió."
+      subtitle={
+        tipo === "ventas"
+          ? "Elige el periodo y genera el reporte para ver cuánto se vendió."
+          : "Productos activos con existencia igual o menor a su mínimo."
+      }
     >
+      <div className="reporte-elige" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          className={tipo === "ventas" ? "is-active" : ""}
+          aria-selected={tipo === "ventas"}
+          onClick={() => setTipo("ventas")}
+        >
+          Ventas
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={tipo === "minimos" ? "is-active" : ""}
+          aria-selected={tipo === "minimos"}
+          onClick={() => {
+            setTipo("minimos");
+            setAperturaMinimos((n) => n + 1);
+          }}
+        >
+          Productos bajo el mínimo
+        </button>
+      </div>
+
+      {tipo === "ventas" && (
       <form className="mov-filtros mov-filtros--reporte" onSubmit={generar}>
         <label className="mov-filtros__control mov-filtros__control--date">
           <span>Desde</span>
@@ -156,14 +218,15 @@ export default function ReportesPage() {
           </button>
         </div>
       </form>
+      )}
 
-      {error && (
+      {tipo === "ventas" && error && (
         <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
           {error}
         </p>
       )}
 
-      {reporte && (
+      {tipo === "ventas" && reporte && (
         <section className="card table-card">
           <div className="table-wrap">
             <table className="data-table">
@@ -203,6 +266,54 @@ export default function ReportesPage() {
                   <td />
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {tipo === "minimos" && errorMinimos && (
+        <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
+          {errorMinimos}
+        </p>
+      )}
+
+      {tipo === "minimos" && cargandoMinimos && (
+        <p className="status-pending">
+          <Loader2 size={16} className="spin" /> Cargando reporte…
+        </p>
+      )}
+
+      {tipo === "minimos" && !cargandoMinimos && minimos && (
+        <section className="card table-card">
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Producto</th>
+                  <th>Existencia</th>
+                  <th>Mínimo</th>
+                  <th>Falta para el mínimo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {minimos.map((producto) => (
+                  <tr key={producto.id}>
+                    <td className="mono">{producto.codigo}</td>
+                    <td>{producto.nombre}</td>
+                    <td className="mono">{formatCantidad(producto.existencia)}</td>
+                    <td className="mono">{formatCantidad(producto.minimo)}</td>
+                    <td className="mono">{formatCantidad(producto.faltante)}</td>
+                  </tr>
+                ))}
+                {minimos.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="empty-cell">
+                      No hay productos bajo el mínimo.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
             </table>
           </div>
         </section>

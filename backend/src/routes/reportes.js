@@ -4,8 +4,10 @@ import { db } from "../db/index.js";
 import {
   ferCliente,
   ferDetalleVenta,
+  ferInventario,
   ferMovimientoInventario,
   ferPedido,
+  ferProducto,
   ferUsuario,
   ferVenta,
 } from "../db/schema.js";
@@ -177,6 +179,46 @@ router.get("/ventas", async (req, res, next) => {
         ventas: filas,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/productos-bajo-minimo", async (_req, res, next) => {
+  try {
+    const rows = await db
+      .select({
+        id: ferProducto.id,
+        codigo: ferProducto.codigo,
+        nombre: ferProducto.nombre,
+        existencia: ferInventario.existenciaActual,
+        minimo: ferProducto.existenciaMinima,
+      })
+      .from(ferProducto)
+      .leftJoin(ferInventario, eq(ferInventario.idProducto, ferProducto.id))
+      .where(
+        and(
+          eq(ferProducto.estado, "A"),
+          sql`COALESCE(${ferInventario.existenciaActual}, 0) <= ${ferProducto.existenciaMinima}`
+        )
+      )
+      .orderBy(asc(ferProducto.codigo));
+
+    const productos = rows.map((row) => {
+      const existencia = toNumber(row.existencia);
+      const minimo = toNumber(row.minimo);
+      const faltante = Math.max(0, Math.round((minimo - existencia) * 1000) / 1000);
+      return {
+        id: row.id,
+        codigo: row.codigo,
+        nombre: row.nombre,
+        existencia,
+        minimo,
+        faltante,
+      };
+    });
+
+    res.json({ success: true, data: { productos } });
   } catch (error) {
     next(error);
   }

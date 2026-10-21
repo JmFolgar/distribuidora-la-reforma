@@ -309,6 +309,10 @@ export function createPago(payload) {
   });
 }
 
+export function reporteProductosBajoMinimo() {
+  return apiRequest("/reportes/productos-bajo-minimo");
+}
+
 export function reporteVentas({ desde, hasta }) {
   const params = new URLSearchParams();
   if (desde) params.set("desde", desde);

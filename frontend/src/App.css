@@ -1019,6 +1019,37 @@
   width: 180px;
 }
 
+.reporte-elige {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.reporte-elige button {
+  height: 36px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reporte-elige button:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.reporte-elige button.is-active {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .mov-filtros__control > span {
   padding-left: 0.15rem;
   font-size: 12px;
