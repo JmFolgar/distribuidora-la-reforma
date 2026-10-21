@@ -14,6 +14,7 @@ import {
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { montoPositivo } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -170,6 +171,7 @@ async function registrarPago(tx, { idVenta, idMetodoPago, monto, referencia, usu
       id: ferVenta.id,
       estadoVenta: ferVenta.estado,
       idPedido: ferPedido.id,
+      numeroPedido: ferPedido.numeroPedido,
       porcentajeDescuento: ferPedido.porcentajeDescuento,
       estadoPedido: ferEstadoPedido.codigo,
       idEstadoPedido: ferEstadoPedido.id,
@@ -285,6 +287,8 @@ async function registrarPago(tx, { idVenta, idMetodoPago, monto, referencia, usu
     monto: roundMoney(monto),
     saldo: saldoNuevo,
     pedidoCompletado,
+    idPedido: venta.idPedido,
+    numeroPedido: venta.numeroPedido,
   };
 }
 
@@ -311,6 +315,27 @@ router.post("/", requireRole(...ROLES), async (req, res) => {
         usuarioId: Number(req.user.sub),
       })
     );
+
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PAGOS",
+      accion: "PAGO",
+      entidad: "FER_PAGO",
+      idRegistro: resultado.id,
+      registro: resultado.numeroPago,
+      mensaje: `Pago ${resultado.numeroPago} por ${resultado.monto}`,
+    });
+    if (resultado.pedidoCompletado) {
+      await registrarAuditoria({
+        idUsuario: Number(req.user.sub),
+        modulo: "PEDIDOS",
+        accion: "CAMBIO_ESTADO",
+        entidad: "FER_PEDIDO",
+        idRegistro: resultado.idPedido,
+        registro: resultado.numeroPedido,
+        mensaje: `El pedido ${resultado.numeroPedido} quedó completado con el pago ${resultado.numeroPago}`,
+      });
+    }
 
     res.status(201).json({ success: true, data: resultado });
   } catch (error) {

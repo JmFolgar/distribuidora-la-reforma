@@ -15,6 +15,7 @@ import {
   nitSchema,
   telefonoOpcionalSchema,
 } from "../validacion.js";
+import { codigoCliente, registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -298,6 +299,20 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
       })
       .returning();
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "CLIENTES",
+      accion: "CREAR",
+      entidad: "FER_CLIENTE",
+      idRegistro: creado.id,
+      registro: codigoCliente(creado.id),
+      valorNuevo: {
+        nombre: `${primerNombre} ${primerApellido}`.trim(),
+        nit: creado.nit,
+      },
+      mensaje: `Alta del cliente ${codigoCliente(creado.id)}`,
+    });
+
     res.status(201).json({
       success: true,
       data: await mapCliente(creado),
@@ -391,6 +406,28 @@ router.patch("/:id", requireRole(...ROLES_ESCRITURA), async (req, res, next) => 
       })
       .where(eq(ferCliente.id, id))
       .returning();
+
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "CLIENTES",
+      accion: "MODIFICAR",
+      entidad: "FER_CLIENTE",
+      idRegistro: id,
+      registro: codigoCliente(id),
+      valorAnterior: {
+        nombre: [cliente.primerNombre, cliente.primerApellido].filter(Boolean).join(" "),
+        nit: cliente.nit,
+        correo: cliente.correo,
+        telefono: cliente.telefono,
+      },
+      valorNuevo: {
+        nombre: `${primerNombre} ${primerApellido}`.trim(),
+        nit: nitNorm.slice(0, 20),
+        correo: data.correo ?? null,
+        telefono: data.telefono ?? null,
+      },
+      mensaje: `Modificación del cliente ${codigoCliente(id)}`,
+    });
 
     res.json({
       success: true,

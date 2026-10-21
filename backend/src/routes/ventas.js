@@ -16,6 +16,7 @@ import {
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { enteroPositivo } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -483,7 +484,26 @@ router.post("/", requireRole(...ROLES), async (req, res) => {
       })
     );
 
-    res.status(201).json({ success: true, data: await ventaCompleta(ventaId) });
+    const data = await ventaCompleta(ventaId);
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "VENTAS",
+      accion: "VENTA",
+      entidad: "FER_VENTA",
+      idRegistro: data.id,
+      registro: data.numeroVenta,
+      mensaje: `Venta ${data.numeroVenta} del pedido ${data.numeroPedido}`,
+    });
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PEDIDOS",
+      accion: "CAMBIO_ESTADO",
+      entidad: "FER_PEDIDO",
+      idRegistro: data.idPedido,
+      registro: data.numeroPedido,
+      mensaje: `El pedido ${data.numeroPedido} pasó a en proceso por la venta ${data.numeroVenta}`,
+    });
+    res.status(201).json({ success: true, data });
   } catch (error) {
     if (error.status) {
       return res.status(error.status).json({

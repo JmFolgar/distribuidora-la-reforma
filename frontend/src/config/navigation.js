@@ -124,7 +124,6 @@ export const NAV_GROUPS = [
         path: "/auditoria",
         icon: ScrollText,
         roles: ["ADMINISTRADOR"],
-        soon: true,
       },
     ],
   },

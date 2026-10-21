@@ -16,6 +16,7 @@ import {
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { enteroPositivo } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -578,9 +579,19 @@ router.post("/", requireRole(...ROLES), async (req, res, next) => {
       .where(eq(ferPedido.id, resultado.pedidoId))
       .limit(1);
     const detalles = await lineasDePedidos([resultado.pedidoId]);
+    const data = mapPedido(row, detalles.get(resultado.pedidoId) || []);
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PEDIDOS",
+      accion: data.estado === "CREADO" ? "CREAR" : "CAMBIO_ESTADO",
+      entidad: "FER_PEDIDO",
+      idRegistro: data.id,
+      registro: data.numeroPedido,
+      mensaje: `Pedido ${data.numeroPedido} en estado ${data.estadoNombre || data.estado}`,
+    });
     res.status(201).json({
       success: true,
-      data: mapPedido(row, detalles.get(resultado.pedidoId) || []),
+      data,
     });
   } catch (error) {
     next(error);
@@ -627,9 +638,19 @@ router.patch("/:id", requireRole(...ROLES), async (req, res, next) => {
 
     const [row] = await consultaPedido().where(eq(ferPedido.id, id)).limit(1);
     const detalles = await lineasDePedidos([id]);
+    const data = mapPedido(row, detalles.get(id) || []);
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PEDIDOS",
+      accion: data.estado === "CREADO" ? "MODIFICAR" : "CAMBIO_ESTADO",
+      entidad: "FER_PEDIDO",
+      idRegistro: data.id,
+      registro: data.numeroPedido,
+      mensaje: `Pedido ${data.numeroPedido} en estado ${data.estadoNombre || data.estado}`,
+    });
     res.json({
       success: true,
-      data: mapPedido(row, detalles.get(id) || []),
+      data,
     });
   } catch (error) {
     next(error);
@@ -752,6 +773,7 @@ async function resolverPedido(tx, { id, aprobar, motivo, usuarioId }) {
       estado: destino.codigo,
       resueltoPor: quien,
       motivo: aprobar ? null : motivo,
+      registro: pedido.numeroPedido,
     },
     resultado: "EXITO",
     mensaje: (aprobar

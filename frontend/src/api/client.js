@@ -302,6 +302,16 @@ export function createPago(payload) {
   });
 }
 
+export function listAuditoria(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.usuario) params.set("usuario", String(filtros.usuario));
+  if (filtros.modulo) params.set("modulo", filtros.modulo);
+  if (filtros.desde) params.set("desde", filtros.desde);
+  if (filtros.hasta) params.set("hasta", filtros.hasta);
+  const qs = params.toString();
+  return apiRequest(`/auditoria${qs ? `?${qs}` : ""}`);
+}
+
 export function listMovimientosInventario(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));
