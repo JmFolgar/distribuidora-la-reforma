@@ -302,12 +302,14 @@ export default function ClientesPage() {
             aria-label="Buscar clientes por nombre o NIT"
           />
         </label>
-
-        {!loading && (
-          <span className="toolbar-meta">
-            {clientesFiltrados.length} de {clientes.length}
-          </span>
-        )}
+        <button
+          type="button"
+          className="mov-filtros__reset"
+          disabled={!busqueda.trim()}
+          onClick={() => setBusqueda("")}
+        >
+          Limpiar filtros
+        </button>
       </div>
 
       <section className="card table-card">
@@ -358,9 +360,16 @@ export default function ClientesPage() {
                 {clientesFiltrados.length === 0 && (
                   <tr>
                     <td colSpan={puedeEscribir ? 6 : 5} className="empty-cell">
-                      {clientes.length === 0
-                        ? "No hay clientes registrados."
-                        : "No se encontraron clientes con esa búsqueda."}
+                      {clientes.length === 0 ? (
+                        "No hay clientes registrados."
+                      ) : (
+                        <div className="empty-filtros">
+                          <p>No hay resultados</p>
+                          <button type="button" className="btn-ghost" onClick={() => setBusqueda("")}>
+                            Limpiar filtros
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )}

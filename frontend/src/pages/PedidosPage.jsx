@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Eye, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -32,6 +32,41 @@ function formatFecha(iso) {
     timeStyle: "short",
   });
 }
+
+function fechaDia(iso) {
+  if (!iso) return "";
+  const fecha = new Date(iso);
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
+function fechaHoy() {
+  return fechaDia(new Date().toISOString());
+}
+
+function fechaCalendarioValida(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [anio, mes, dia] = value.split("-").map(Number);
+  if (anio < 2000 || anio > 2100) return false;
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  return (
+    fecha.getUTCFullYear() === anio &&
+    fecha.getUTCMonth() === mes - 1 &&
+    fecha.getUTCDate() === dia
+  );
+}
+
+const ESTADOS_PEDIDO = [
+  ["CREADO", "Creado"],
+  ["PENDIENTE_APROBACION", "Pendiente de aprobación"],
+  ["APROBADO", "Aprobado"],
+  ["EN_PROCESO", "En proceso"],
+  ["COMPLETADO", "Completado"],
+  ["CANCELADO", "Cancelado"],
+];
+
+const FILTROS_PEDIDO = { idCliente: "", estado: "", desde: "", hasta: "" };
 
 function textoDisponibles(existencia) {
   const n = Number(existencia);
@@ -157,7 +192,8 @@ export default function PedidosPage() {
   const [limiteDescuento, setLimiteDescuento] = useState(10);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState(FILTROS_PEDIDO);
+  const [filtroError, setFiltroError] = useState("");
   const [modal, setModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState({
@@ -187,16 +223,64 @@ export default function PedidosPage() {
   const [cancelacionError, setCancelacionError] = useState("");
   const [cancelando, setCancelando] = useState(false);
 
+  const clientesFiltro = useMemo(() => {
+    const mapa = new Map();
+    for (const cliente of clientes) mapa.set(String(cliente.id), cliente.nombre);
+    for (const pedido of pedidos) {
+      if (!mapa.has(String(pedido.idCliente))) {
+        mapa.set(String(pedido.idCliente), pedido.clienteNombre);
+      }
+    }
+    return [...mapa.entries()]
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [clientes, pedidos]);
+
   const pedidosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    if (!q) return pedidos;
-    return pedidos.filter(
-      (p) =>
-        (p.numeroPedido || "").toLowerCase().includes(q) ||
-        (p.clienteNombre || "").toLowerCase().includes(q) ||
-        (p.estadoNombre || "").toLowerCase().includes(q)
-    );
-  }, [pedidos, busqueda]);
+    return pedidos.filter((pedido) => {
+      if (filtros.idCliente && String(pedido.idCliente) !== filtros.idCliente) return false;
+      if (filtros.estado && pedido.estado !== filtros.estado) return false;
+      const dia = fechaDia(pedido.fechaPedido);
+      if (filtros.desde && dia < filtros.desde) return false;
+      if (filtros.hasta && dia > filtros.hasta) return false;
+      return true;
+    });
+  }, [pedidos, filtros]);
+
+  const hayFiltrosPedido = Boolean(
+    filtros.idCliente || filtros.estado || filtros.desde || filtros.hasta
+  );
+
+  function cambiarFiltro(campo, valor, input) {
+    const esFecha = campo === "desde" || campo === "hasta";
+    if (esFecha && input?.validity?.badInput) {
+      setFiltroError("La fecha no es válida");
+      return;
+    }
+    if (esFecha && valor && !fechaCalendarioValida(valor)) {
+      setFiltroError("La fecha no es válida");
+      return;
+    }
+    if (esFecha && valor && valor > fechaHoy()) {
+      setFiltroError("La fecha no puede ser posterior a hoy");
+      return;
+    }
+    if (campo === "desde" && valor && filtros.hasta && valor > filtros.hasta) {
+      setFiltroError("La fecha inicial no puede ser posterior a la fecha final");
+      return;
+    }
+    if (campo === "hasta" && valor && filtros.desde && valor < filtros.desde) {
+      setFiltroError("La fecha final no puede ser anterior a la fecha inicial");
+      return;
+    }
+    setFiltroError("");
+    setFiltros((actual) => ({ ...actual, [campo]: valor }));
+  }
+
+  function limpiarFiltrosPedido() {
+    setFiltros(FILTROS_PEDIDO);
+    setFiltroError("");
+  }
 
   const subtotalForm = useMemo(
     () => form.lineas.reduce((sum, linea) => sum + lineaSubtotal(linea, productos), 0),
@@ -515,23 +599,71 @@ export default function PedidosPage() {
         </p>
       )}
 
-      <div className="toolbar">
-        <label className="toolbar-search">
-          <Search size={16} strokeWidth={1.75} aria-hidden />
+      <form className="mov-filtros" onSubmit={(e) => e.preventDefault()}>
+        <label className="mov-filtros__control">
+          <span>Cliente</span>
+          <select
+            value={filtros.idCliente}
+            onChange={(e) => cambiarFiltro("idCliente", e.target.value)}
+          >
+            <option value="">Todos</option>
+            {clientesFiltro.map((cliente) => (
+              <option key={cliente.id} value={cliente.id}>
+                {cliente.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="mov-filtros__control">
+          <span>Estado</span>
+          <select
+            value={filtros.estado}
+            onChange={(e) => cambiarFiltro("estado", e.target.value)}
+          >
+            <option value="">Todos</option>
+            {ESTADOS_PEDIDO.map(([codigo, nombre]) => (
+              <option key={codigo} value={codigo}>
+                {nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="mov-filtros__control mov-filtros__control--date">
+          <span>Desde</span>
           <input
-            type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por número, cliente o estado…"
-            aria-label="Buscar pedidos"
+            type="date"
+            value={filtros.desde}
+            min="2000-01-01"
+            max={filtros.hasta && filtros.hasta < fechaHoy() ? filtros.hasta : fechaHoy()}
+            onChange={(e) => cambiarFiltro("desde", e.target.value, e.target)}
           />
         </label>
-        {!loading && (
-          <span className="toolbar-meta">
-            {pedidosFiltrados.length} de {pedidos.length}
-          </span>
-        )}
-      </div>
+        <label className="mov-filtros__control mov-filtros__control--date">
+          <span>Hasta</span>
+          <input
+            type="date"
+            value={filtros.hasta}
+            min={filtros.desde || "2000-01-01"}
+            max={fechaHoy()}
+            onChange={(e) => cambiarFiltro("hasta", e.target.value, e.target)}
+          />
+        </label>
+        <div className="mov-filtros__actions">
+          <button
+            type="button"
+            className="mov-filtros__reset"
+            disabled={!hayFiltrosPedido}
+            onClick={limpiarFiltrosPedido}
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </form>
+      {filtroError && (
+        <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
+          {filtroError}
+        </p>
+      )}
 
       <section className="card table-card">
         {loading ? (
@@ -612,9 +744,16 @@ export default function PedidosPage() {
                 {pedidosFiltrados.length === 0 && (
                   <tr>
                     <td colSpan={7} className="empty-cell">
-                      {pedidos.length === 0
-                        ? "No hay pedidos registrados."
-                        : "No se encontraron pedidos con esa búsqueda."}
+                      {pedidos.length === 0 ? (
+                        "No hay pedidos registrados."
+                      ) : (
+                        <div className="empty-filtros">
+                          <p>No hay resultados</p>
+                          <button type="button" className="btn-ghost" onClick={limpiarFiltrosPedido}>
+                            Limpiar filtros
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )}

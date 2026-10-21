@@ -205,9 +205,7 @@ export default function PagosPage() {
       )}
 
       <section className="card table-card" style={{ marginBottom: "1.25rem" }}>
-        <h2 className="card-title" style={{ margin: "0 0 0.75rem" }}>
-          Saldos pendientes
-        </h2>
+        <h2 className="table-card__title">Saldos pendientes</h2>
         {loading ? (
           <p className="status-pending">
             <Loader2 size={16} className="spin" /> Cargando…

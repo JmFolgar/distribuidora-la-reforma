@@ -1023,7 +1023,8 @@
 }
 
 .mov-filtros__control select,
-.mov-filtros__control input[type="date"] {
+.mov-filtros__control input[type="date"],
+.mov-filtros__control input[type="search"] {
   width: 100%;
   height: 40px;
   margin: 0;
@@ -1046,8 +1047,15 @@
   background-image: none;
 }
 
+.mov-filtros__control input[type="search"] {
+  padding-right: 0.75rem;
+  background-image: none;
+  cursor: text;
+}
+
 .mov-filtros__control select:hover,
-.mov-filtros__control input[type="date"]:hover {
+.mov-filtros__control input[type="date"]:hover,
+.mov-filtros__control input[type="search"]:hover {
   background-color: var(--color-bg);
   border-color: var(--color-border);
   color: var(--color-text);
@@ -1058,7 +1066,8 @@
 }
 
 .mov-filtros__control select:focus,
-.mov-filtros__control input[type="date"]:focus {
+.mov-filtros__control input[type="date"]:focus,
+.mov-filtros__control input[type="search"]:focus {
   outline: none;
   border-color: var(--color-accent);
   background-color: var(--color-surface);
@@ -1116,6 +1125,58 @@
 .mov-filtros__clear:hover {
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+.mov-filtros__reset {
+  height: 40px;
+  padding: 0 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+
+.mov-filtros__reset:not(:disabled) {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.mov-filtros__reset:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.mov-filtros__check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 40px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.mov-filtros__check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.empty-filtros {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.empty-filtros p {
+  margin: 0;
 }
 
 @media (max-width: 860px) {
@@ -1372,6 +1433,16 @@
 .table-card {
   padding: 0;
   overflow: hidden;
+}
+
+.table-card__title {
+  margin: 0;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .table-wrap {
