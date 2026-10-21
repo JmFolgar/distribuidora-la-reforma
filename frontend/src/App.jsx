@@ -18,6 +18,7 @@ import ProveedoresPage from "./pages/ProveedoresPage";
 import ComprasPage from "./pages/ComprasPage";
 import InventarioPage from "./pages/InventarioPage";
 import PedidosPage from "./pages/PedidosPage";
+import VentasPage from "./pages/VentasPage";
 import "./App.css";
 
 /**
@@ -119,6 +120,18 @@ export default function App() {
                   roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
                 >
                   <PedidosPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ventas"
+            element={
+              <ProtectedRoute>
+                <RoleRoute
+                  roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
+                >
+                  <VentasPage />
                 </RoleRoute>
               </ProtectedRoute>
             }

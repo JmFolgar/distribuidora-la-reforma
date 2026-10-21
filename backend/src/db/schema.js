@@ -422,3 +422,39 @@ export const ferAuditoria = pgTable("FER_AUDITORIA", {
   resultado: varchar("AUD_RESULTADO", { length: 10 }).notNull(),
   mensaje: varchar("AUD_MENSAJE", { length: 500 }),
 });
+
+export const ferVenta = pgTable("FER_VENTA", {
+  id: bigint("VEN_ID_VENTA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idPedido: bigint("VEN_ID_PEDIDO", { mode: "number" }).notNull(),
+  numeroFactura: varchar("VEN_NUMERO_FACTURA", { length: 40 }).notNull(),
+  fechaVenta: timestamp("VEN_FECHA_VENTA", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  estado: varchar("VEN_ESTADO", { length: 15 }).notNull().default("BORRADOR"),
+  fechaFinalizacion: timestamp("VEN_FECHA_FINALIZACION", { withTimezone: true }),
+});
+
+export const ferDetalleVenta = pgTable("FER_DETALLE_VENTA", {
+  id: bigint("DVE_ID_DETALLE_VENTA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idVenta: bigint("DVE_ID_VENTA", { mode: "number" }).notNull(),
+  idDetallePedido: bigint("DVE_ID_DETALLE_PEDIDO", { mode: "number" }).notNull(),
+  cantidad: numeric("DVE_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  precioUnitario: numeric("DVE_PRECIO_UNITARIO", { precision: 14, scale: 2 }).notNull(),
+  costoUnitario: numeric("DVE_COSTO_UNITARIO", { precision: 14, scale: 2 }).notNull(),
+  porcentajeDescuento: numeric("DVE_PORCENTAJE_DESCUENTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  porcentajeImpuesto: numeric("DVE_PORCENTAJE_IMPUESTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+});

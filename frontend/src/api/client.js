@@ -272,6 +272,21 @@ export function rechazarPedido(id, motivo) {
   });
 }
 
+export function listVentas() {
+  return apiRequest("/ventas");
+}
+
+export function getVenta(id) {
+  return apiRequest(`/ventas/${id}`);
+}
+
+export function createVenta(payload) {
+  return apiRequest("/ventas", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listMovimientosInventario(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));

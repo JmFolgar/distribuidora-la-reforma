@@ -5,10 +5,12 @@ import { useAuth } from "../auth/AuthContext";
 import {
   aprobarPedido,
   createPedido,
+  createVenta,
   getPedido,
   listClientes,
   listPedidos,
   listProductos,
+  notificarAlertas,
   rechazarPedido,
   updatePedido,
 } from "../api/client";
@@ -165,6 +167,11 @@ export default function PedidosPage() {
   const [motivoError, setMotivoError] = useState("");
   const [revisionError, setRevisionError] = useState("");
   const [resolviendo, setResolviendo] = useState(false);
+  const [venta, setVenta] = useState(null);
+  const [cargandoVenta, setCargandoVenta] = useState(false);
+  const [vendiendo, setVendiendo] = useState(false);
+  const [ventaError, setVentaError] = useState("");
+  const [ventaFields, setVentaFields] = useState({});
 
   const pedidosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -395,6 +402,52 @@ export default function PedidosPage() {
     }
   }
 
+  function cerrarVenta(forzar = false) {
+    if (vendiendo && !forzar) return;
+    setVenta(null);
+    setVentaError("");
+    setVentaFields({});
+  }
+
+  async function abrirVenta(pedido) {
+    setVenta(pedido);
+    setVentaError("");
+    setVentaFields({});
+    setCargandoVenta(true);
+    try {
+      const res = await getPedido(pedido.id);
+      setVenta(res.data);
+    } catch (err) {
+      setVentaError(err.message || "No se pudo abrir el pedido");
+    } finally {
+      setCargandoVenta(false);
+    }
+  }
+
+  async function registrarVenta() {
+    if (!venta?.lineas?.length) return;
+    setVendiendo(true);
+    setVentaError("");
+    setVentaFields({});
+    try {
+      await createVenta({
+        idPedido: venta.id,
+        lineas: venta.lineas.map((linea) => ({
+          idDetallePedido: linea.id,
+          cantidad: Number(linea.cantidad),
+        })),
+      });
+      notificarAlertas();
+      setVendiendo(false);
+      cerrarVenta(true);
+      await cargarLista();
+    } catch (err) {
+      setVentaFields(err.body?.fields || {});
+      setVentaError(err.message || "No se pudo registrar la venta");
+      setVendiendo(false);
+    }
+  }
+
   return (
     <AppShell
       title="Pedidos"
@@ -464,6 +517,15 @@ export default function PedidosPage() {
                     <td className="mono">{formatMoney(p.total)}</td>
                     <td>
                       <div className="row-actions">
+                        {p.estado === "APROBADO" && (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--success"
+                            onClick={() => abrirVenta(p)}
+                          >
+                            Vender
+                          </button>
+                        )}
                         {p.editable ? (
                           <button
                             type="button"
@@ -954,6 +1016,105 @@ export default function PedidosPage() {
                       )}
                     </button>
                   )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {venta && (
+        <div className="modal-backdrop" role="presentation" onClick={cerrarVenta}>
+          <div
+            className="modal modal--compra modal--fit"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pedido-venta-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="pedido-venta-title">Registrar venta</h2>
+            <div className="pedido-revision__intro">
+              <p className="pedido-revision__numero mono">{venta.numeroPedido}</p>
+              <p className="page-subtitle">
+                Se entregan los productos y la existencia baja. Después la venta queda cerrada.
+              </p>
+            </div>
+
+            {cargandoVenta ? (
+              <p className="status-pending">
+                <Loader2 size={16} className="spin" /> Cargando…
+              </p>
+            ) : (
+              <>
+                <dl className="pedido-ficha">
+                  <div>
+                    <dt>Cliente</dt>
+                    <dd>{venta.clienteNombre}</dd>
+                  </div>
+                  <div>
+                    <dt>Total</dt>
+                    <dd className="mono">{formatMoney(venta.total)}</dd>
+                  </div>
+                </dl>
+
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Disponibles</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(venta.lineas || []).map((linea, index) => (
+                        <tr key={linea.id}>
+                          <td>
+                            {linea.codigo} — {linea.nombre}
+                            {ventaFields[`lineas_${index}_cantidad`] && (
+                              <em className="field-error" style={{ display: "block", marginTop: 4 }}>
+                                {ventaFields[`lineas_${index}_cantidad`]}
+                              </em>
+                            )}
+                          </td>
+                          <td className="mono">{linea.cantidad}</td>
+                          <td className="mono">{linea.existencia}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {ventaError && (
+                  <p className="form-error" role="alert">
+                    {ventaError}
+                  </p>
+                )}
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={cerrarVenta}
+                    disabled={vendiendo}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-inline"
+                    disabled={vendiendo || !venta.lineas?.length}
+                    onClick={registrarVenta}
+                  >
+                    {vendiendo ? (
+                      <>
+                        <Loader2 size={16} className="spin" />
+                        Registrando…
+                      </>
+                    ) : (
+                      "Registrar venta"
+                    )}
+                  </button>
                 </div>
               </>
             )}
