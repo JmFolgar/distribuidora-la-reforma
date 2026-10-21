@@ -116,7 +116,6 @@ export const NAV_GROUPS = [
         path: "/reportes",
         icon: BarChart3,
         roles: ["ADMINISTRADOR", "SUPERVISOR"],
-        soon: true,
       },
       {
         id: "auditoria",

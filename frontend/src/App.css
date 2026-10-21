@@ -1014,6 +1014,11 @@
   flex: 0 1 160px;
 }
 
+.mov-filtros--reporte .mov-filtros__control {
+  flex: 0 0 180px;
+  width: 180px;
+}
+
 .mov-filtros__control > span {
   padding-left: 0.15rem;
   font-size: 12px;
@@ -1578,6 +1583,12 @@
 
 .data-table tbody tr:hover td {
   background: #fafbfc;
+}
+
+.data-table tfoot td {
+  font-weight: 600;
+  background: var(--color-bg);
+  border-bottom: none;
 }
 
 .compra-lineas {

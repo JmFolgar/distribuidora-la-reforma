@@ -309,6 +309,14 @@ export function createPago(payload) {
   });
 }
 
+export function reporteVentas({ desde, hasta }) {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  const qs = params.toString();
+  return apiRequest(`/reportes/ventas${qs ? `?${qs}` : ""}`);
+}
+
 export function listAuditoria(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.usuario) params.set("usuario", String(filtros.usuario));
