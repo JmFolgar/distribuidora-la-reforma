@@ -42,7 +42,6 @@ export const NAV_GROUPS = [
         path: "/pedidos",
         icon: ShoppingCart,
         roles: ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"],
-        soon: true,
       },
       {
         id: "ventas",

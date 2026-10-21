@@ -239,6 +239,28 @@ export function notificarAlertas() {
   window.dispatchEvent(new Event("inventario-alertas"));
 }
 
+export function listPedidos() {
+  return apiRequest("/pedidos");
+}
+
+export function getPedido(id) {
+  return apiRequest(`/pedidos/${id}`);
+}
+
+export function createPedido(payload) {
+  return apiRequest("/pedidos", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePedido(id, payload) {
+  return apiRequest(`/pedidos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listMovimientosInventario(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));
