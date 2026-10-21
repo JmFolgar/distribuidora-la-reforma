@@ -272,6 +272,13 @@ export function rechazarPedido(id, motivo) {
   });
 }
 
+export function cancelarPedido(id, motivo) {
+  return apiRequest(`/pedidos/${id}/cancelar`, {
+    method: "POST",
+    body: JSON.stringify({ motivo }),
+  });
+}
+
 export function listVentas() {
   return apiRequest("/ventas");
 }

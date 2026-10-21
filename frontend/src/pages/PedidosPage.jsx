@@ -6,6 +6,7 @@ import {
   aprobarPedido,
   createPedido,
   createVenta,
+  cancelarPedido,
   getPedido,
   listClientes,
   listPedidos,
@@ -124,6 +125,14 @@ function payloadDesdeForm(form, enviar) {
   };
 }
 
+function puedeCancelar(estado) {
+  return (
+    estado === "CREADO" ||
+    estado === "PENDIENTE_APROBACION" ||
+    estado === "APROBADO"
+  );
+}
+
 function estadoBadgeClass(estado) {
   if (estado === "PENDIENTE_APROBACION") return "badge--warning";
   if (estado === "APROBADO" || estado === "COMPLETADO") return "badge--success";
@@ -172,6 +181,11 @@ export default function PedidosPage() {
   const [vendiendo, setVendiendo] = useState(false);
   const [ventaError, setVentaError] = useState("");
   const [ventaFields, setVentaFields] = useState({});
+  const [cancelacion, setCancelacion] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [motivoCancelacionError, setMotivoCancelacionError] = useState("");
+  const [cancelacionError, setCancelacionError] = useState("");
+  const [cancelando, setCancelando] = useState(false);
 
   const pedidosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -409,6 +423,42 @@ export default function PedidosPage() {
     setVentaFields({});
   }
 
+  function abrirCancelacion(pedido) {
+    setCancelacion(pedido);
+    setMotivoCancelacion("");
+    setMotivoCancelacionError("");
+    setCancelacionError("");
+  }
+
+  function cerrarCancelacion(forzar = false) {
+    if (cancelando && !forzar) return;
+    setCancelacion(null);
+    setMotivoCancelacion("");
+    setMotivoCancelacionError("");
+    setCancelacionError("");
+  }
+
+  async function confirmarCancelacion() {
+    const texto = motivoCancelacion.trim();
+    if (!texto) {
+      setMotivoCancelacionError("Escriba por qué se cancela el pedido");
+      return;
+    }
+    setCancelando(true);
+    setCancelacionError("");
+    setMotivoCancelacionError("");
+    try {
+      await cancelarPedido(cancelacion.id, texto);
+      setCancelando(false);
+      cerrarCancelacion(true);
+      await cargarLista();
+    } catch (err) {
+      if (err.body?.fields?.motivo) setMotivoCancelacionError(err.body.fields.motivo);
+      setCancelacionError(err.message || "No se pudo cancelar el pedido");
+      setCancelando(false);
+    }
+  }
+
   async function abrirVenta(pedido) {
     setVenta(pedido);
     setVentaError("");
@@ -524,6 +574,15 @@ export default function PedidosPage() {
                             onClick={() => abrirVenta(p)}
                           >
                             Vender
+                          </button>
+                        )}
+                        {puedeCancelar(p.estado) && (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--danger"
+                            onClick={() => abrirCancelacion(p)}
+                          >
+                            Cancelar
                           </button>
                         )}
                         {p.editable ? (
@@ -882,10 +941,22 @@ export default function PedidosPage() {
                     <dt>Total</dt>
                     <dd className="mono">{formatMoney(revision.total)}</dd>
                   </div>
-                  {revision.resueltoPor && (
+                  {revision.resueltoPor && (revision.estado !== "CANCELADO" || revision.canceladoPor) && (
                     <div>
-                      <dt>{revision.estado === "CANCELADO" ? "Rechazado por" : "Aprobado por"}</dt>
+                      <dt>Aprobado por</dt>
                       <dd>{revision.resueltoPor}</dd>
+                    </div>
+                  )}
+                  {revision.estado === "CANCELADO" && revision.resueltoPor && !revision.canceladoPor && (
+                    <div>
+                      <dt>Rechazado por</dt>
+                      <dd>{revision.resueltoPor}</dd>
+                    </div>
+                  )}
+                  {revision.canceladoPor && (
+                    <div>
+                      <dt>Cancelado por</dt>
+                      <dd>{revision.canceladoPor}</dd>
                     </div>
                   )}
                   {revision.motivo && (
@@ -1118,6 +1189,80 @@ export default function PedidosPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {cancelacion && (
+        <div className="modal-backdrop" role="presentation" onClick={cerrarCancelacion}>
+          <div
+            className="modal modal--fit"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pedido-cancelar-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="pedido-cancelar-title">Cancelar pedido</h2>
+            <div className="pedido-revision__intro">
+              <p className="pedido-revision__numero mono">{cancelacion.numeroPedido}</p>
+              <p className="page-subtitle">
+                El cliente ya no quiere este pedido. Escriba el motivo. Después no se puede vender ni volver a activarlo.
+              </p>
+            </div>
+            <label className={`field ${motivoCancelacionError ? "field--error" : ""}`}>
+              <span>
+                Motivo
+                <span className="field-required" aria-hidden="true">*</span>
+              </span>
+              <textarea
+                value={motivoCancelacion}
+                rows={3}
+                maxLength={500}
+                disabled={cancelando}
+                placeholder="Por qué el cliente ya no lo quiere"
+                onChange={(e) => {
+                  setMotivoCancelacion(e.target.value);
+                  setMotivoCancelacionError("");
+                }}
+              />
+              {motivoCancelacionError ? (
+                <em className="field-error">{motivoCancelacionError}</em>
+              ) : (
+                <span className="field-help">
+                  El pedido quedará cancelado y no se podrá vender.
+                </span>
+              )}
+            </label>
+            {cancelacionError && (
+              <p className="form-error" role="alert">
+                {cancelacionError}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={cerrarCancelacion}
+                disabled={cancelando}
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-inline"
+                disabled={cancelando}
+                onClick={confirmarCancelacion}
+              >
+                {cancelando ? (
+                  <>
+                    <Loader2 size={16} className="spin" />
+                    Cancelando…
+                  </>
+                ) : (
+                  "Confirmar cancelación"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

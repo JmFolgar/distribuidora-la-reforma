@@ -286,6 +286,9 @@ async function registrarVenta(tx, { idPedido, lineas, usuarioId }) {
     .for("update");
 
   if (!pedido) throw httpError(404, "Pedido no encontrado");
+  if (pedido.estadoCodigo === "CANCELADO") {
+    throw httpError(400, "Un pedido cancelado no se factura");
+  }
   if (pedido.estadoCodigo === ESTADO_PENDIENTE) {
     throw httpError(
       400,

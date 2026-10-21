@@ -13,6 +13,7 @@ import {
   ferPedido,
   ferProducto,
   ferUsuario,
+  ferVenta,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { enteroPositivo } from "../validacion.js";
@@ -32,6 +33,8 @@ const ESTADO_CREADO = "CREADO";
 const ESTADO_PENDIENTE = "PENDIENTE_APROBACION";
 const ESTADO_APROBADO = "APROBADO";
 const ESTADO_CANCELADO = "CANCELADO";
+const ESTADOS_CANCELABLES = new Set([ESTADO_CREADO, ESTADO_PENDIENTE, ESTADO_APROBADO]);
+const MARCA_CANCELACION = "Cancelación: ";
 
 const porcentajeSchema = z.preprocess(
   (v) => (v == null || v === "" ? 0 : v),
@@ -309,7 +312,10 @@ function mapPedido(row, lineas, extra = {}) {
     editable: row.estadoCodigo === ESTADO_CREADO,
     creadoPor: extra.creadoPor ?? null,
     resueltoPor: extra.resueltoPor ?? null,
-    motivo: extra.motivo ?? null,
+    canceladoPor: extra.canceladoPor ?? null,
+    motivo:
+      extra.motivo ??
+      (row.estadoCodigo === ESTADO_CANCELADO ? row.observacion ?? null : null),
     ...montos,
     lineas,
   };
@@ -319,7 +325,13 @@ async function contextoPedidos(ids) {
   const mapa = new Map();
   if (!ids.length) return mapa;
   for (const id of ids) {
-    mapa.set(id, { creadoPor: null, resueltoPor: null, motivo: null });
+    mapa.set(id, {
+      creadoPor: null,
+      resueltoPor: null,
+      canceladoPor: null,
+      motivo: null,
+      rechazado: false,
+    });
   }
 
   const historias = await db
@@ -359,10 +371,46 @@ async function contextoPedidos(ids) {
   for (const row of aprobaciones) {
     const actual = mapa.get(row.idPedido);
     if (!actual) continue;
-    if (row.estado === "RECHAZADA") actual.motivo = row.observacion;
-    if (row.estado === "APROBADA" || row.estado === "RECHAZADA") {
+    if (row.estado === "RECHAZADA") {
+      const texto = row.observacion || "";
+      if (texto.startsWith(MARCA_CANCELACION)) {
+        actual.motivo = texto.slice(MARCA_CANCELACION.length);
+      } else {
+        actual.motivo = texto;
+        actual.resueltoPor = nombrePersona(row);
+        actual.rechazado = true;
+      }
+    } else if (row.estado === "APROBADA") {
       actual.resueltoPor = nombrePersona(row);
     }
+  }
+
+  const cancelaciones = await db
+    .select({
+      idPedido: ferHistorialPedido.idPedido,
+      observacion: ferHistorialPedido.observacion,
+      primerNombre: ferUsuario.primerNombre,
+      primerApellido: ferUsuario.primerApellido,
+    })
+    .from(ferHistorialPedido)
+    .innerJoin(
+      ferEstadoPedido,
+      eq(ferHistorialPedido.idEstadoNuevo, ferEstadoPedido.id)
+    )
+    .innerJoin(ferUsuario, eq(ferHistorialPedido.idUsuario, ferUsuario.id))
+    .where(
+      and(
+        inArray(ferHistorialPedido.idPedido, ids),
+        eq(ferEstadoPedido.codigo, ESTADO_CANCELADO)
+      )
+    )
+    .orderBy(desc(ferHistorialPedido.id));
+
+  for (const row of cancelaciones) {
+    const actual = mapa.get(row.idPedido);
+    if (!actual || actual.rechazado || actual.canceladoPor) continue;
+    actual.canceladoPor = nombrePersona(row);
+    if (!actual.motivo) actual.motivo = row.observacion;
   }
 
   return mapa;
@@ -382,6 +430,7 @@ const pedidoSelect = {
   idCliente: ferPedido.idCliente,
   porcentajeDescuento: ferPedido.porcentajeDescuento,
   fechaPedido: ferPedido.fechaPedido,
+  observacion: ferPedido.observacion,
   estadoCodigo: ferEstadoPedido.codigo,
   estadoNombre: ferEstadoPedido.nombre,
   tipoPersona: ferCliente.tipoPersona,
@@ -844,6 +893,156 @@ router.post("/:id/rechazar", requireRole(...ROLES_APROBACION), async (req, res, 
         message: resultado.error.message,
       });
     }
+
+    res.json({ success: true, data: await pedidoCompleto(id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const motivoCancelacionSchema = z.object({
+  motivo: z.preprocess(
+    (v) => (v == null ? "" : v),
+    z
+      .string()
+      .trim()
+      .min(1, "Escriba por qué se cancela el pedido")
+      .max(500, "El motivo no puede tener más de 500 caracteres")
+  ),
+});
+
+async function cancelarPedido(tx, { id, motivo, usuarioId }) {
+  const [pedido] = await tx
+    .select({
+      id: ferPedido.id,
+      numeroPedido: ferPedido.numeroPedido,
+      estadoCodigo: ferEstadoPedido.codigo,
+      idEstadoPedido: ferPedido.idEstadoPedido,
+    })
+    .from(ferPedido)
+    .innerJoin(ferEstadoPedido, eq(ferPedido.idEstadoPedido, ferEstadoPedido.id))
+    .where(eq(ferPedido.id, id))
+    .limit(1)
+    .for("update");
+
+  if (!pedido) {
+    return { error: { status: 404, message: "Pedido no encontrado" } };
+  }
+
+  const [venta] = await tx
+    .select({ id: ferVenta.id })
+    .from(ferVenta)
+    .where(eq(ferVenta.idPedido, id))
+    .limit(1);
+  if (venta || !ESTADOS_CANCELABLES.has(pedido.estadoCodigo)) {
+    if (pedido.estadoCodigo === ESTADO_CANCELADO) {
+      return {
+        error: {
+          status: 400,
+          message: "El pedido ya está cancelado y no se puede volver a activar",
+        },
+      };
+    }
+    return {
+      error: {
+        status: 400,
+        message: "Este pedido ya tiene una venta y no se puede cancelar",
+      },
+    };
+  }
+
+  const catalogo = await estadosPorCodigo(tx);
+  const destino = catalogo[ESTADO_CANCELADO];
+  if (!destino) {
+    throw new Error("Falta el estado Cancelado en la base de datos");
+  }
+
+  const [usuario] = await tx
+    .select({
+      primerNombre: ferUsuario.primerNombre,
+      primerApellido: ferUsuario.primerApellido,
+    })
+    .from(ferUsuario)
+    .where(eq(ferUsuario.id, usuarioId))
+    .limit(1);
+  const quien = nombrePersona(usuario) || "Usuario";
+
+  await tx
+    .update(ferPedido)
+    .set({
+      idEstadoPedido: destino.id,
+      observacion: motivo,
+    })
+    .where(eq(ferPedido.id, id));
+
+  const [pendiente] = await tx
+    .select({ id: ferAprobacion.id })
+    .from(ferAprobacion)
+    .where(and(eq(ferAprobacion.idPedido, id), eq(ferAprobacion.estado, "PENDIENTE")))
+    .limit(1);
+  if (pendiente) {
+    await tx
+      .update(ferAprobacion)
+      .set({
+        estado: "RECHAZADA",
+        idUsuarioAutoriza: usuarioId,
+        fechaRespuesta: new Date(),
+        observacion: `${MARCA_CANCELACION}${motivo}`.slice(0, 500),
+      })
+      .where(eq(ferAprobacion.id, pendiente.id));
+  }
+
+  await tx.insert(ferHistorialPedido).values({
+    idPedido: id,
+    idEstadoAnterior: pedido.idEstadoPedido,
+    idEstadoNuevo: destino.id,
+    idUsuario: usuarioId,
+    observacion: motivo,
+  });
+
+  return { numeroPedido: pedido.numeroPedido, estadoAnterior: pedido.estadoCodigo, quien };
+}
+
+router.post("/:id/cancelar", requireRole(...ROLES), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: "Pedido no válido" });
+    }
+
+    const parsed = motivoCancelacionSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Escriba por qué se cancela el pedido",
+        fields: { motivo: parsed.error.issues[0]?.message },
+      });
+    }
+
+    const motivo = parsed.data.motivo;
+    const usuarioId = Number(req.user.sub);
+    const resultado = await db.transaction((tx) =>
+      cancelarPedido(tx, { id, motivo, usuarioId })
+    );
+
+    if (resultado.error) {
+      return res.status(resultado.error.status).json({
+        success: false,
+        message: resultado.error.message,
+      });
+    }
+
+    await registrarAuditoria({
+      idUsuario: usuarioId,
+      modulo: "PEDIDOS",
+      accion: "CAMBIO_ESTADO",
+      entidad: "FER_PEDIDO",
+      idRegistro: id,
+      registro: resultado.numeroPedido,
+      valorAnterior: { estado: resultado.estadoAnterior },
+      valorNuevo: { estado: ESTADO_CANCELADO, motivo },
+      mensaje: `${resultado.quien} canceló el pedido ${resultado.numeroPedido}: ${motivo}`,
+    });
 
     res.json({ success: true, data: await pedidoCompleto(id) });
   } catch (error) {
