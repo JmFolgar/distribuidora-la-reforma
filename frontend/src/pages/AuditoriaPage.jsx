@@ -3,6 +3,24 @@ import { Eye, Loader2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { listAuditoria } from "../api/client";
 
+const ESTADOS = {
+  CREADO: "Creado",
+  PENDIENTE_APROBACION: "Pendiente de aprobación",
+  APROBADO: "Aprobado",
+  EN_PROCESO: "En proceso",
+  COMPLETADO: "Completado",
+  CANCELADO: "Cancelado",
+  FINALIZADA: "Finalizada",
+  CANCELADA: "Cancelada",
+  BORRADOR: "Borrador",
+  PENDIENTE: "Pendiente",
+  RECIBIDA: "Recibida",
+  CONFIRMADA: "Confirmada",
+  REGISTRADO: "Registrado",
+  A: "Activo",
+  I: "Inactivo",
+};
+
 const ETIQUETAS = {
   nombre: "Nombre",
   nit: "NIT",
@@ -42,6 +60,11 @@ function fechaCalendarioValida(value) {
     fecha.getUTCMonth() === mes - 1 &&
     fecha.getUTCDate() === dia
   );
+}
+
+function textoValor(clave, valor) {
+  if (clave === "estado") return ESTADOS[String(valor)] || String(valor);
+  return String(valor);
 }
 
 function entradas(valor) {
@@ -275,7 +298,7 @@ export default function AuditoriaPage() {
                   {anterior.map(([clave, valor]) => (
                     <div key={clave}>
                       <dt>{ETIQUETAS[clave] || clave}</dt>
-                      <dd>{String(valor)}</dd>
+                      <dd>{textoValor(clave, valor)}</dd>
                     </div>
                   ))}
                 </dl>
@@ -288,7 +311,7 @@ export default function AuditoriaPage() {
                   {nuevo.map(([clave, valor]) => (
                     <div key={clave}>
                       <dt>{ETIQUETAS[clave] || clave}</dt>
-                      <dd>{String(valor)}</dd>
+                      <dd>{textoValor(clave, valor)}</dd>
                     </div>
                   ))}
                 </dl>
