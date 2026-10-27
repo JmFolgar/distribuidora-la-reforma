@@ -151,7 +151,6 @@ export const NAV_GROUPS = [
         path: "/roles",
         icon: Shield,
         roles: ["ADMINISTRADOR"],
-        soon: true,
       },
     ],
   },

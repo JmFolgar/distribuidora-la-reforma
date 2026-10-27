@@ -294,6 +294,31 @@ router.patch("/:id", async (req, res, next) => {
 
     const rolesActuales = await rolesActivosDeUsuario(id);
     const rolActual = rolesActuales[0]?.nombre ?? null;
+    const esAdministrador = rolesActuales.some((item) => item.nombre === "ADMINISTRADOR");
+
+    if (esAdministrador && rol !== "ADMINISTRADOR" && usuario.estado === "A") {
+      const otros = await db
+        .select({ id: ferUsuario.id })
+        .from(ferUsuarioRol)
+        .innerJoin(ferRol, eq(ferUsuarioRol.idRol, ferRol.id))
+        .innerJoin(ferUsuario, eq(ferUsuarioRol.idUsuario, ferUsuario.id))
+        .where(
+          and(
+            eq(ferRol.nombre, "ADMINISTRADOR"),
+            eq(ferRol.estado, "A"),
+            eq(ferUsuarioRol.estado, "A"),
+            eq(ferUsuario.estado, "A"),
+            sql`${ferUsuarioRol.fechaRevocacion} IS NULL`,
+            sql`${ferUsuario.id} <> ${id}`
+          )
+        );
+      if (otros.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Debe quedar al menos un administrador activo",
+        });
+      }
+    }
 
     const [actualizado] = await db
       .update(ferUsuario)
@@ -316,15 +341,32 @@ router.patch("/:id", async (req, res, next) => {
           and(
             eq(ferUsuarioRol.idUsuario, id),
             eq(ferUsuarioRol.estado, "A"),
-            sql`${ferUsuarioRol.fechaRevocacion} IS NULL`
+            sql`${ferUsuarioRol.fechaRevocacion} IS NULL`,
+            sql`${ferUsuarioRol.idRol} <> ${rolRow.id}`
           )
         );
 
-      await db.insert(ferUsuarioRol).values({
-        idUsuario: id,
-        idRol: rolRow.id,
-        estado: "A",
-      });
+      const [asignacion] = await db
+        .select({ id: ferUsuarioRol.id })
+        .from(ferUsuarioRol)
+        .where(and(eq(ferUsuarioRol.idUsuario, id), eq(ferUsuarioRol.idRol, rolRow.id)))
+        .limit(1);
+
+      if (asignacion) {
+        await db
+          .update(ferUsuarioRol)
+          .set({
+            estado: "A",
+            fechaRevocacion: null,
+          })
+          .where(eq(ferUsuarioRol.id, asignacion.id));
+      } else {
+        await db.insert(ferUsuarioRol).values({
+          idUsuario: id,
+          idRol: rolRow.id,
+          estado: "A",
+        });
+      }
     }
 
     await registrarAuditoria({

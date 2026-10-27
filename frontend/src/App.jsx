@@ -23,6 +23,7 @@ import PagosPage from "./pages/PagosPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
 import ReportesPage from "./pages/ReportesPage";
 import ConfiguracionPage from "./pages/ConfiguracionPage";
+import RolesPage from "./pages/RolesPage";
 import "./App.css";
 
 /**
@@ -68,6 +69,16 @@ export default function App() {
               <ProtectedRoute>
                 <RoleRoute roles={["ADMINISTRADOR"]}>
                   <ConfiguracionPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roles"
+            element={
+              <ProtectedRoute>
+                <RoleRoute roles={["ADMINISTRADOR"]}>
+                  <RolesPage />
                 </RoleRoute>
               </ProtectedRoute>
             }
