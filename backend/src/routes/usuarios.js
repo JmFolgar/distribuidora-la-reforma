@@ -401,13 +401,6 @@ router.patch("/:id/desactivar", async (req, res, next) => {
       });
     }
 
-    if (req.user.sub === id) {
-      return res.status(400).json({
-        success: false,
-        message: "No puede desactivar su propio usuario",
-      });
-    }
-
     const [usuario] = await db
       .select()
       .from(ferUsuario)
@@ -426,6 +419,22 @@ router.patch("/:id/desactivar", async (req, res, next) => {
         success: true,
         data: await mapUsuario(usuario),
         message: "El usuario ya estaba inactivo",
+      });
+    }
+
+    const rolesActuales = await rolesActivosDeUsuario(id);
+    const esAdministrador = rolesActuales.some((item) => item.nombre === "ADMINISTRADOR");
+    if (esAdministrador) {
+      return res.status(400).json({
+        success: false,
+        message: "No se puede desactivar a un administrador",
+      });
+    }
+
+    if (req.user.sub === id) {
+      return res.status(400).json({
+        success: false,
+        message: "No puede desactivar su propio usuario",
       });
     }
 

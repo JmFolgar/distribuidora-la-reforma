@@ -37,6 +37,13 @@ const EMPTY_FORM = {
   rol: "OPERADOR",
 };
 
+function esAdministrador(usuario) {
+  return (
+    usuario?.rol === "ADMINISTRADOR" ||
+    (usuario?.roles || []).includes("ADMINISTRADOR")
+  );
+}
+
 function validarFormulario(form, modo) {
   const fields = {};
   if (!form.nombre.trim()) fields.nombre = "El nombre es obligatorio";
@@ -245,6 +252,10 @@ export default function UsuariosPage() {
 
   async function confirmarDesactivar() {
     if (!editando) return;
+    if (esAdministrador(editando)) {
+      setFormError("No se puede desactivar a un administrador");
+      return;
+    }
     setAccionId(editando.id);
     setGuardando(true);
     setFormError("");
@@ -429,7 +440,7 @@ export default function UsuariosPage() {
                           <Pencil size={14} strokeWidth={1.75} />
                           Editar
                         </button>
-                        {u.activo ? (
+                        {u.activo && !esAdministrador(u) ? (
                           <button
                             type="button"
                             className="btn-action btn-action--danger"
@@ -440,7 +451,7 @@ export default function UsuariosPage() {
                             <UserX size={14} strokeWidth={1.75} />
                             Desactivar
                           </button>
-                        ) : (
+                        ) : u.activo ? null : (
                           <button
                             type="button"
                             className="btn-action btn-action--success"
