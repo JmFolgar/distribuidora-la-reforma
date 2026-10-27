@@ -324,6 +324,15 @@ export function reporteProductosBajoMinimo() {
   return apiRequest("/reportes/productos-bajo-minimo");
 }
 
+export function reporteCompras({ desde, hasta, idProveedor }) {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  if (idProveedor) params.set("idProveedor", String(idProveedor));
+  const qs = params.toString();
+  return apiRequest(`/reportes/compras${qs ? `?${qs}` : ""}`);
+}
+
 export function reporteVentas({ desde, hasta }) {
   const params = new URLSearchParams();
   if (desde) params.set("desde", desde);

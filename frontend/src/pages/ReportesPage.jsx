@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
-import { reporteProductosBajoMinimo, reporteVentas } from "../api/client";
+import { listProveedores, reporteCompras, reporteProductosBajoMinimo, reporteVentas } from "../api/client";
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString("es-GT", {
@@ -32,6 +32,13 @@ function fechaHoy() {
   return `${ahora.getFullYear()}-${mes}-${dia}`;
 }
 
+function claseEstadoCompra(estado) {
+  if (estado === "Pendiente") return "badge--warning";
+  if (estado === "Recibida") return "badge--success";
+  if (estado === "Cancelada") return "badge--danger";
+  return "badge--info";
+}
+
 function fechaCalendarioValida(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [anio, mes, dia] = value.split("-").map(Number);
@@ -55,6 +62,13 @@ export default function ReportesPage() {
   const [cargandoMinimos, setCargandoMinimos] = useState(false);
   const [errorMinimos, setErrorMinimos] = useState("");
   const [aperturaMinimos, setAperturaMinimos] = useState(0);
+  const [proveedores, setProveedores] = useState([]);
+  const [compraDesde, setCompraDesde] = useState("");
+  const [compraHasta, setCompraHasta] = useState("");
+  const [compraProveedor, setCompraProveedor] = useState("");
+  const [errorCompras, setErrorCompras] = useState("");
+  const [generandoCompras, setGenerandoCompras] = useState(false);
+  const [reporteComprasData, setReporteComprasData] = useState(null);
 
   function validar(inicio, fin) {
     if (!inicio || !fin) return "Indique la fecha inicial y la fecha final";
@@ -108,6 +122,82 @@ export default function ReportesPage() {
   }
 
   useEffect(() => {
+    if (tipo !== "compras" || proveedores.length) return undefined;
+    let activo = true;
+    listProveedores()
+      .then((res) => {
+        if (activo) setProveedores(res.data || []);
+      })
+      .catch(() => {
+        if (activo) setProveedores([]);
+      });
+    return () => {
+      activo = false;
+    };
+  }, [tipo, proveedores.length]);
+
+  function cambiarCompraDesde(valor, input) {
+    if (input?.validity?.badInput || (valor && !fechaCalendarioValida(valor))) {
+      setErrorCompras("La fecha no es válida");
+      return;
+    }
+    if (valor && valor > fechaHoy()) {
+      setErrorCompras("La fecha no puede ser posterior a hoy");
+      return;
+    }
+    if (valor && compraHasta && valor > compraHasta) {
+      setErrorCompras("La fecha inicial no puede ser posterior a la fecha final");
+      return;
+    }
+    setErrorCompras("");
+    setCompraDesde(valor);
+    setReporteComprasData(null);
+  }
+
+  function cambiarCompraHasta(valor, input) {
+    if (input?.validity?.badInput || (valor && !fechaCalendarioValida(valor))) {
+      setErrorCompras("La fecha no es válida");
+      return;
+    }
+    if (valor && valor > fechaHoy()) {
+      setErrorCompras("La fecha no puede ser posterior a hoy");
+      return;
+    }
+    if (valor && compraDesde && valor < compraDesde) {
+      setErrorCompras("La fecha final no puede ser anterior a la fecha inicial");
+      return;
+    }
+    setErrorCompras("");
+    setCompraHasta(valor);
+    setReporteComprasData(null);
+  }
+
+  async function generarCompras(event) {
+    event.preventDefault();
+    const mensaje = validar(compraDesde, compraHasta);
+    if (mensaje) {
+      setErrorCompras(mensaje);
+      setReporteComprasData(null);
+      return;
+    }
+    setGenerandoCompras(true);
+    setErrorCompras("");
+    try {
+      const res = await reporteCompras({
+        desde: compraDesde,
+        hasta: compraHasta,
+        idProveedor: compraProveedor,
+      });
+      setReporteComprasData(res.data);
+    } catch (err) {
+      setReporteComprasData(null);
+      setErrorCompras(err.message || "No se pudo generar el reporte");
+    } finally {
+      setGenerandoCompras(false);
+    }
+  }
+
+  useEffect(() => {
     if (tipo !== "minimos") return undefined;
     let activo = true;
     setCargandoMinimos(true);
@@ -156,7 +246,9 @@ export default function ReportesPage() {
       subtitle={
         tipo === "ventas"
           ? "Elige el periodo y genera el reporte para ver cuánto se vendió."
-          : "Productos activos con existencia igual o menor a su mínimo."
+          : tipo === "compras"
+            ? "Elige el periodo y, si quieres, un proveedor, para ver cuánto se le compró."
+            : "Productos activos con existencia igual o menor a su mínimo."
       }
     >
       <div className="reporte-elige" role="tablist">
@@ -180,6 +272,15 @@ export default function ReportesPage() {
           }}
         >
           Productos bajo el mínimo
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={tipo === "compras" ? "is-active" : ""}
+          aria-selected={tipo === "compras"}
+          onClick={() => setTipo("compras")}
+        >
+          Compras por proveedor
         </button>
       </div>
 
@@ -266,6 +367,124 @@ export default function ReportesPage() {
                   <td />
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {tipo === "compras" && (
+        <form className="mov-filtros mov-filtros--reporte" onSubmit={generarCompras}>
+          <label className="mov-filtros__control mov-filtros__control--proveedor">
+            <span>Proveedor</span>
+            <select
+              value={compraProveedor}
+              onChange={(e) => {
+                setCompraProveedor(e.target.value);
+                setReporteComprasData(null);
+                setErrorCompras("");
+              }}
+            >
+              <option value="">Todos</option>
+              {proveedores.map((proveedor) => (
+                <option key={proveedor.id} value={proveedor.id}>
+                  {proveedor.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mov-filtros__control mov-filtros__control--date">
+            <span>Desde</span>
+            <input
+              type="date"
+              value={compraDesde}
+              min="2000-01-01"
+              max={compraHasta && compraHasta < fechaHoy() ? compraHasta : fechaHoy()}
+              onChange={(e) => cambiarCompraDesde(e.target.value, e.target)}
+            />
+          </label>
+          <label className="mov-filtros__control mov-filtros__control--date">
+            <span>Hasta</span>
+            <input
+              type="date"
+              value={compraHasta}
+              min={compraDesde || "2000-01-01"}
+              max={fechaHoy()}
+              onChange={(e) => cambiarCompraHasta(e.target.value, e.target)}
+            />
+          </label>
+          <div className="mov-filtros__actions">
+            <button type="submit" className="btn btn-primary btn-inline" disabled={generandoCompras}>
+              {generandoCompras ? (
+                <>
+                  <Loader2 size={16} className="spin" />
+                  Generando…
+                </>
+              ) : (
+                "Generar reporte"
+              )}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {tipo === "compras" && errorCompras && (
+        <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
+          {errorCompras}
+        </p>
+      )}
+
+      {tipo === "compras" && reporteComprasData && (
+        <section className="card table-card">
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Proveedor</th>
+                  <th>Número de compra</th>
+                  <th>Fecha</th>
+                  <th>Estado</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reporteComprasData.grupos.flatMap((grupo) => {
+                  const filas = grupo.compras.map((compra) => (
+                    <tr key={compra.id}>
+                      <td>{grupo.proveedor}</td>
+                      <td className="mono">{compra.numeroCompra}</td>
+                      <td>{formatFecha(compra.fecha)}</td>
+                      <td>
+                        <span className={`badge ${claseEstadoCompra(compra.estado)}`}>{compra.estado}</span>
+                      </td>
+                      <td className="mono">{formatMoney(compra.total)}</td>
+                    </tr>
+                  ));
+                  if (!reporteComprasData.idProveedor) {
+                    filas.push(
+                      <tr key={`total-${grupo.idProveedor}`} className="reporte-subtotal">
+                        <td colSpan={4}>Total {grupo.proveedor}</td>
+                        <td className="mono">{formatMoney(grupo.total)}</td>
+                      </tr>
+                    );
+                  }
+                  return filas;
+                })}
+                {reporteComprasData.grupos.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="empty-cell">
+                      No hay resultados
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {reporteComprasData.grupos.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={4}>Total general</td>
+                    <td className="mono">{formatMoney(reporteComprasData.totalGeneral)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </section>

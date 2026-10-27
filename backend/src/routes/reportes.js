@@ -3,11 +3,14 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   ferCliente,
+  ferCompra,
+  ferDetalleCompra,
   ferDetalleVenta,
   ferInventario,
   ferMovimientoInventario,
   ferPedido,
   ferProducto,
+  ferProveedor,
   ferUsuario,
   ferVenta,
 } from "../db/schema.js";
@@ -219,6 +222,136 @@ router.get("/productos-bajo-minimo", async (_req, res, next) => {
     });
 
     res.json({ success: true, data: { productos } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const ESTADOS_COMPRA = {
+  CREADA: "Pendiente",
+  PENDIENTE: "Pendiente",
+  RECIBIDA: "Recibida",
+  CANCELADA: "Cancelada",
+};
+
+router.get("/compras", async (req, res, next) => {
+  try {
+    const desde = String(req.query.desde || "").trim();
+    const hasta = String(req.query.hasta || "").trim();
+
+    if (!desde || !hasta) {
+      return res.status(400).json({
+        success: false,
+        message: "Indique la fecha inicial y la fecha final",
+      });
+    }
+    if (!fechaValida(desde) || !fechaValida(hasta)) {
+      return res.status(400).json({
+        success: false,
+        message: "La fecha no es válida",
+      });
+    }
+    if (desde > fechaHoy() || hasta > fechaHoy()) {
+      return res.status(400).json({
+        success: false,
+        message: "La fecha no puede ser posterior a hoy",
+      });
+    }
+    if (desde > hasta) {
+      return res.status(400).json({
+        success: false,
+        message: "La fecha inicial no puede ser posterior a la fecha final",
+      });
+    }
+
+    const crudo = String(req.query.idProveedor || "").trim();
+    let idProveedor = null;
+    if (crudo) {
+      idProveedor = Number(crudo);
+      if (!Number.isInteger(idProveedor) || idProveedor <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Seleccione un proveedor",
+        });
+      }
+    }
+
+    const filtros = [
+      sql`(${ferCompra.fechaCompra} AT TIME ZONE 'America/Guatemala')::date >= ${desde}`,
+      sql`(${ferCompra.fechaCompra} AT TIME ZONE 'America/Guatemala')::date <= ${hasta}`,
+    ];
+    if (idProveedor) filtros.push(eq(ferCompra.idProveedor, idProveedor));
+
+    const compras = await db
+      .select({
+        id: ferCompra.id,
+        numeroCompra: ferCompra.numeroCompra,
+        fecha: ferCompra.fechaCompra,
+        estado: ferCompra.estado,
+        idProveedor: ferProveedor.id,
+        proveedor: ferProveedor.razonSocial,
+      })
+      .from(ferCompra)
+      .innerJoin(ferProveedor, eq(ferCompra.idProveedor, ferProveedor.id))
+      .where(and(...filtros))
+      .orderBy(asc(ferProveedor.razonSocial), asc(ferCompra.fechaCompra), asc(ferCompra.id));
+
+    const ids = compras.map((compra) => compra.id);
+    const lineasPorCompra = new Map();
+    if (ids.length) {
+      const lineas = await db
+        .select({
+          idCompra: ferDetalleCompra.idCompra,
+          cantidad: ferDetalleCompra.cantidad,
+          costoUnitario: ferDetalleCompra.costoUnitario,
+        })
+        .from(ferDetalleCompra)
+        .where(inArray(ferDetalleCompra.idCompra, ids));
+      for (const linea of lineas) {
+        const lista = lineasPorCompra.get(linea.idCompra) || [];
+        lista.push(linea);
+        lineasPorCompra.set(linea.idCompra, lista);
+      }
+    }
+
+    const grupos = [];
+    for (const compra of compras) {
+      const lineas = lineasPorCompra.get(compra.id) || [];
+      const total = roundMoney(
+        lineas.reduce((sum, linea) => sum + toNumber(linea.cantidad) * toNumber(linea.costoUnitario), 0)
+      );
+      let grupo = grupos.find((item) => item.idProveedor === compra.idProveedor);
+      if (!grupo) {
+        grupo = {
+          idProveedor: compra.idProveedor,
+          proveedor: compra.proveedor,
+          total: 0,
+          compras: [],
+        };
+        grupos.push(grupo);
+      }
+      grupo.compras.push({
+        id: compra.id,
+        numeroCompra: compra.numeroCompra,
+        fecha: compra.fecha,
+        estado: ESTADOS_COMPRA[compra.estado] || compra.estado,
+        total,
+      });
+      grupo.total = roundMoney(grupo.total + total);
+    }
+
+    const totalGeneral = roundMoney(grupos.reduce((sum, grupo) => sum + grupo.total, 0));
+
+    res.json({
+      success: true,
+      data: {
+        desde,
+        hasta,
+        idProveedor,
+        totalGeneral,
+        grupos,
+      },
+    });
   } catch (error) {
     next(error);
   }

@@ -1037,6 +1037,11 @@
   width: 180px;
 }
 
+.mov-filtros--reporte .mov-filtros__control--proveedor {
+  flex: 0 0 260px;
+  width: 260px;
+}
+
 .reporte-elige {
   display: flex;
   flex-wrap: wrap;
@@ -1638,6 +1643,11 @@
   font-weight: 600;
   background: var(--color-bg);
   border-bottom: none;
+}
+
+.data-table tr.reporte-subtotal td {
+  font-weight: 600;
+  background: var(--color-bg);
 }
 
 .compra-lineas {
