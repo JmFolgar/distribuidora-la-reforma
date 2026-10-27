@@ -209,6 +209,24 @@
   color: var(--color-text-muted);
 }
 
+.devolucion-cantidad {
+  width: 5.5rem;
+  height: 36px;
+  padding: 0 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.devolucion-cantidad:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
 .field textarea {
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--color-border);
@@ -1834,6 +1852,16 @@
   background: #fee2e2;
   border-color: #fca5a5;
   color: #991b1b;
+}
+
+.btn-action--neutral {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn-action--neutral:hover:not(:disabled) {
+  background: var(--color-bg);
 }
 
 .btn-action--success {

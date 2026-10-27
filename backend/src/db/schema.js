@@ -484,3 +484,25 @@ export const ferPago = pgTable("FER_PAGO", {
   estado: varchar("PAG_ESTADO", { length: 15 }).notNull().default("REGISTRADO"),
   observacion: varchar("PAG_OBSERVACION", { length: 500 }),
 });
+
+export const ferDevolucion = pgTable("FER_DEVOLUCION", {
+  id: bigint("DEV_ID_DEVOLUCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idVenta: bigint("DEV_ID_VENTA", { mode: "number" }).notNull(),
+  idUsuario: bigint("DEV_ID_USUARIO", { mode: "number" }).notNull(),
+  numeroDevolucion: varchar("DEV_NUMERO_DEVOLUCION", { length: 40 }).notNull(),
+  fechaDevolucion: timestamp("DEV_FECHA_DEVOLUCION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  motivo: varchar("DEV_MOTIVO", { length: 300 }).notNull(),
+});
+
+export const ferDetalleDevolucion = pgTable("FER_DETALLE_DEVOLUCION", {
+  id: bigint("DDE_ID_DETALLE_DEVOLUCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idDevolucion: bigint("DDE_ID_DEVOLUCION", { mode: "number" }).notNull(),
+  idDetalleVenta: bigint("DDE_ID_DETALLE_VENTA", { mode: "number" }).notNull(),
+  cantidad: numeric("DDE_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+});

@@ -27,6 +27,7 @@ export const ACCIONES_AUDITORIA = {
   AJUSTE: "Ajuste",
   VENTA: "Venta",
   PAGO: "Pago",
+  DEVOLUCION: "Devolución",
   CAMBIO_ESTADO: "Cambio de estado",
 };
 
@@ -40,6 +41,10 @@ export function nombreModulo(codigo) {
 
 export function nombreAccion(codigo) {
   return ACCIONES_AUDITORIA[codigo] || codigo;
+}
+
+export function listaAcciones() {
+  return Object.entries(ACCIONES_AUDITORIA).map(([id, nombre]) => ({ id, nombre }));
 }
 
 export async function registrarAuditoria(evento, executor = db) {

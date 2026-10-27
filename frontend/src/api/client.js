@@ -294,6 +294,13 @@ export function createVenta(payload) {
   });
 }
 
+export function registrarDevolucion(idVenta, payload) {
+  return apiRequest(`/ventas/${idVenta}/devoluciones`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listPagos() {
   return apiRequest("/pagos");
 }
@@ -325,6 +332,7 @@ export function listAuditoria(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.usuario) params.set("usuario", String(filtros.usuario));
   if (filtros.modulo) params.set("modulo", filtros.modulo);
+  if (filtros.accion) params.set("accion", filtros.accion);
   if (filtros.desde) params.set("desde", filtros.desde);
   if (filtros.hasta) params.set("hasta", filtros.hasta);
   const qs = params.toString();

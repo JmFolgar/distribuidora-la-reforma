@@ -147,6 +147,33 @@ async function lineasDeVentas(ids) {
   return mapa;
 }
 
+async function devueltoPorDetalle(ids) {
+  const mapa = new Map();
+  if (!ids.length) return mapa;
+  const rows = await db.execute(sql`
+    SELECT d."DDE_ID_DETALLE_VENTA" AS id,
+           COALESCE(SUM(d."DDE_CANTIDAD"), 0)::float AS devuelto
+    FROM "FER_DETALLE_DEVOLUCION" d
+    INNER JOIN "FER_DEVOLUCION" h
+      ON h."DEV_ID_DEVOLUCION" = d."DDE_ID_DEVOLUCION"
+    WHERE h."DEV_ID_VENTA" IN (${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `
+    )})
+    GROUP BY d."DDE_ID_DETALLE_VENTA"
+  `);
+  for (const row of rows.rows) mapa.set(Number(row.id), toNumber(row.devuelto));
+  return mapa;
+}
+
+function conPendiente(lineas, devueltoMap) {
+  return lineas.map((linea) => {
+    const devuelto = devueltoMap.get(Number(linea.id)) || 0;
+    const pendiente = Math.max(0, Math.round((linea.cantidad - devuelto) * 1000) / 1000);
+    return { ...linea, devuelto, pendiente };
+  });
+}
+
 function mapVenta(row, lineas, pagado = 0) {
   const montos = totales(lineas, row.porcentajeDescuento);
   const abonado = roundMoney(pagado);
@@ -211,7 +238,8 @@ async function ventaCompleta(id) {
   if (!row) return null;
   const detalles = await lineasDeVentas([id]);
   const pagado = await pagadoPorVenta([id]);
-  return mapVenta(row, detalles.get(id) || [], pagado.get(id) || 0);
+  const devuelto = await devueltoPorDetalle([id]);
+  return mapVenta(row, conPendiente(detalles.get(id) || [], devuelto), pagado.get(id) || 0);
 }
 
 router.get("/", requireRole(...ROLES), async (_req, res, next) => {
@@ -220,10 +248,15 @@ router.get("/", requireRole(...ROLES), async (_req, res, next) => {
     const ids = rows.map((row) => row.id);
     const detalles = await lineasDeVentas(ids);
     const pagado = await pagadoPorVenta(ids);
+    const devuelto = await devueltoPorDetalle(ids);
     res.json({
       success: true,
       data: rows.map((row) =>
-        mapVenta(row, detalles.get(row.id) || [], pagado.get(row.id) || 0)
+        mapVenta(
+          row,
+          conPendiente(detalles.get(row.id) || [], devuelto),
+          pagado.get(row.id) || 0
+        )
       ),
     });
   } catch (error) {

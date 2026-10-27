@@ -33,6 +33,8 @@ const ETIQUETAS = {
   descuento: "Descuento",
   motivo: "Motivo",
   resueltoPor: "Resuelto por",
+  venta: "Venta",
+  lineas: "Productos",
 };
 
 function formatFecha(iso) {
@@ -64,6 +66,12 @@ function fechaCalendarioValida(value) {
 
 function textoValor(clave, valor) {
   if (clave === "estado") return ESTADOS[String(valor)] || String(valor);
+  if (clave === "lineas" && Array.isArray(valor)) {
+    return valor
+      .map((linea) => `${linea.codigo} — ${linea.nombre}: ${linea.cantidad}`)
+      .join(", ");
+  }
+  if (valor && typeof valor === "object") return "";
   return String(valor);
 }
 
@@ -76,7 +84,8 @@ export default function AuditoriaPage() {
   const [eventos, setEventos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [modulos, setModulos] = useState([]);
-  const [filtros, setFiltros] = useState({ usuario: "", modulo: "", desde: "", hasta: "" });
+  const [acciones, setAcciones] = useState([]);
+  const [filtros, setFiltros] = useState({ usuario: "", modulo: "", accion: "", desde: "", hasta: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detalle, setDetalle] = useState(null);
@@ -88,6 +97,7 @@ export default function AuditoriaPage() {
       setEventos(res.data || []);
       setUsuarios(res.filtros?.usuarios || []);
       setModulos(res.filtros?.modulos || []);
+      setAcciones(res.filtros?.acciones || []);
     } catch (err) {
       setError(err.message || "No se pudo consultar la auditoría");
     } finally {
@@ -165,6 +175,17 @@ export default function AuditoriaPage() {
             {modulos.map((modulo) => (
               <option key={modulo.id} value={modulo.id}>
                 {modulo.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field" style={{ minWidth: 180 }}>
+          <span>Acción</span>
+          <select value={filtros.accion} onChange={(e) => cambiar("accion", e.target.value)}>
+            <option value="">Todas</option>
+            {acciones.map((accion) => (
+              <option key={accion.id} value={accion.id}>
+                {accion.nombre}
               </option>
             ))}
           </select>

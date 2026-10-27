@@ -3,7 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { ferAuditoria, ferUsuario } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { MODULOS_AUDITORIA, nombreAccion, nombreModulo } from "../auditoria.js";
+import { ACCIONES_AUDITORIA, MODULOS_AUDITORIA, listaAcciones, nombreAccion, nombreModulo } from "../auditoria.js";
 
 const router = Router();
 
@@ -41,6 +41,10 @@ router.get("/", async (req, res, next) => {
     }
     const modulo = String(req.query.modulo || "").trim();
     if (modulo) condiciones.push(eq(ferAuditoria.modulo, modulo));
+    const accion = String(req.query.accion || "").trim();
+    if (accion && ACCIONES_AUDITORIA[accion]) {
+      condiciones.push(eq(ferAuditoria.accion, accion));
+    }
     if (fechaValida(req.query.desde)) {
       condiciones.push(
         sql`(${ferAuditoria.fechaEvento} AT TIME ZONE 'America/Guatemala')::date >= ${req.query.desde}`
@@ -109,6 +113,7 @@ router.get("/", async (req, res, next) => {
           nombre: nombrePersona(usuario),
         })),
         modulos: MODULOS_AUDITORIA.map(([id, nombre]) => ({ id, nombre })),
+        acciones: listaAcciones(),
       },
     });
   } catch (error) {
