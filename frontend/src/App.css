@@ -2162,3 +2162,141 @@
     padding: 1.25rem;
   }
 }
+
+.dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dash-kpi {
+  min-height: 104px;
+}
+
+.dash-kpi__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.dash-kpi__value {
+  margin: 0.55rem 0 0;
+  color: var(--color-text);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.dash-kpi__value--alerta {
+  color: #d97706;
+}
+
+.dash-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.dash-chart__hint {
+  margin: 0 0 0.85rem;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.dash-vacio {
+  margin: 0;
+  padding: 2.25rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.dash-line {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.dash-line__grid {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+}
+
+.dash-line__tick {
+  fill: #6b7280;
+  font-size: 11px;
+  font-family: Inter, sans-serif;
+}
+
+.dash-line__stroke {
+  fill: none;
+  stroke: #4f46e5;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dash-line__area {
+  fill: #eef2ff;
+}
+
+.dash-line__dot {
+  fill: #4f46e5;
+}
+
+.dash-bars {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-bars__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+  font-size: 13px;
+}
+
+.dash-bars__nombre {
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-bars__cantidad {
+  flex: none;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-bars__track {
+  height: 8px;
+  overflow: hidden;
+  background: #eef2ff;
+  border-radius: 999px;
+}
+
+.dash-bars__fill {
+  height: 100%;
+  background: #4f46e5;
+  border-radius: 999px;
+}
+
+@media (max-width: 1100px) {
+  .dash-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dash-charts {
+    grid-template-columns: 1fr;
+  }
+}

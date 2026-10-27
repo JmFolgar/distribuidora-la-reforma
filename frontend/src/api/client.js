@@ -316,6 +316,10 @@ export function createPago(payload) {
   });
 }
 
+export function getDashboard() {
+  return apiRequest("/dashboard");
+}
+
 export function reporteProductosBajoMinimo() {
   return apiRequest("/reportes/productos-bajo-minimo");
 }

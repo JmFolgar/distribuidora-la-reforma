@@ -18,6 +18,7 @@ import devolucionesRouter from "./routes/devoluciones.js";
 import pagosRouter from "./routes/pagos.js";
 import auditoriaRouter from "./routes/auditoria.js";
 import reportesRouter from "./routes/reportes.js";
+import dashboardRouter from "./routes/dashboard.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -55,6 +56,7 @@ app.use("/api/ventas", devolucionesRouter);
 app.use("/api/pagos", pagosRouter);
 app.use("/api/auditoria", auditoriaRouter);
 app.use("/api/reportes", reportesRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 app.use(notFound);
 app.use(errorHandler);
