@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
-import { listProveedores, reporteCompras, reporteProductosBajoMinimo, reporteVentas } from "../api/client";
+import {
+  listClientes,
+  listProveedores,
+  reporteCompras,
+  reporteProductosBajoMinimo,
+  reporteSaldos,
+  reporteVentas,
+} from "../api/client";
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString("es-GT", {
@@ -69,6 +76,12 @@ export default function ReportesPage() {
   const [errorCompras, setErrorCompras] = useState("");
   const [generandoCompras, setGenerandoCompras] = useState(false);
   const [reporteComprasData, setReporteComprasData] = useState(null);
+  const [clientes, setClientes] = useState([]);
+  const [clienteSaldo, setClienteSaldo] = useState("");
+  const [saldos, setSaldos] = useState(null);
+  const [cargandoSaldos, setCargandoSaldos] = useState(false);
+  const [errorSaldos, setErrorSaldos] = useState("");
+  const [aperturaSaldos, setAperturaSaldos] = useState(0);
 
   function validar(inicio, fin) {
     if (!inicio || !fin) return "Indique la fecha inicial y la fecha final";
@@ -198,6 +211,37 @@ export default function ReportesPage() {
   }
 
   useEffect(() => {
+    if (tipo !== "saldos") return undefined;
+    let activo = true;
+    setCargandoSaldos(true);
+    setErrorSaldos("");
+    if (!clientes.length) {
+      listClientes()
+        .then((res) => {
+          if (activo) setClientes(res.data || []);
+        })
+        .catch(() => {
+          if (activo) setClientes([]);
+        });
+    }
+    reporteSaldos(clienteSaldo)
+      .then((res) => {
+        if (activo) setSaldos(res.data.ventas || []);
+      })
+      .catch((err) => {
+        if (!activo) return;
+        setSaldos([]);
+        setErrorSaldos(err.message || "No se pudo cargar el reporte");
+      })
+      .finally(() => {
+        if (activo) setCargandoSaldos(false);
+      });
+    return () => {
+      activo = false;
+    };
+  }, [tipo, aperturaSaldos, clienteSaldo, clientes.length]);
+
+  useEffect(() => {
     if (tipo !== "minimos") return undefined;
     let activo = true;
     setCargandoMinimos(true);
@@ -248,7 +292,9 @@ export default function ReportesPage() {
           ? "Elige el periodo y genera el reporte para ver cuánto se vendió."
           : tipo === "compras"
             ? "Elige el periodo y, si quieres, un proveedor, para ver cuánto se le compró."
-            : "Productos activos con existencia igual o menor a su mínimo."
+            : tipo === "saldos"
+              ? "Ventas que todavía tienen saldo. Las que ya se pagaron no aparecen."
+              : "Productos activos con existencia igual o menor a su mínimo."
       }
     >
       <div className="reporte-elige" role="tablist">
@@ -281,6 +327,18 @@ export default function ReportesPage() {
           onClick={() => setTipo("compras")}
         >
           Compras por proveedor
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={tipo === "saldos" ? "is-active" : ""}
+          aria-selected={tipo === "saldos"}
+          onClick={() => {
+            setTipo("saldos");
+            setAperturaSaldos((n) => n + 1);
+          }}
+        >
+          Pagos pendientes
         </button>
       </div>
 
@@ -485,6 +543,74 @@ export default function ReportesPage() {
                   </tr>
                 </tfoot>
               )}
+            </table>
+          </div>
+        </section>
+      )}
+
+      {tipo === "saldos" && (
+        <div className="mov-filtros mov-filtros--reporte">
+          <label className="mov-filtros__control mov-filtros__control--proveedor">
+            <span>Cliente</span>
+            <select value={clienteSaldo} onChange={(e) => setClienteSaldo(e.target.value)}>
+              <option value="">Todos</option>
+              {clientes.map((cliente) => (
+                <option key={cliente.id} value={cliente.id}>
+                  {cliente.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {tipo === "saldos" && errorSaldos && (
+        <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
+          {errorSaldos}
+        </p>
+      )}
+
+      {tipo === "saldos" && cargandoSaldos && (
+        <p className="status-pending">
+          <Loader2 size={16} className="spin" /> Cargando reporte…
+        </p>
+      )}
+
+      {tipo === "saldos" && !cargandoSaldos && saldos && (
+        <section className="card table-card">
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Venta</th>
+                  <th>Fecha</th>
+                  <th>Total</th>
+                  <th>Pagado</th>
+                  <th>Saldo</th>
+                  <th>Días desde la venta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {saldos.map((venta) => (
+                  <tr key={venta.id}>
+                    <td>{venta.cliente}</td>
+                    <td className="mono">{venta.numeroVenta}</td>
+                    <td>{formatFecha(venta.fecha)}</td>
+                    <td className="mono">{formatMoney(venta.total)}</td>
+                    <td className="mono">{formatMoney(venta.pagado)}</td>
+                    <td className="mono">{formatMoney(venta.saldo)}</td>
+                    <td className="mono">{venta.dias}</td>
+                  </tr>
+                ))}
+                {saldos.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="empty-cell">
+                      No hay ventas con saldo pendiente.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
             </table>
           </div>
         </section>

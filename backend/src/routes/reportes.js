@@ -34,6 +34,20 @@ function nombrePersona(row) {
   return [row?.primerNombre, row?.primerApellido].filter(Boolean).join(" ");
 }
 
+function nombreCliente(row) {
+  if (row.tipoPersona === "JURIDICA" && row.razonSocial) return row.razonSocial;
+  return nombrePersona(row);
+}
+
+function diasDesde(fecha, hoy) {
+  const dia = new Date(fecha).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return 0;
+  const [y1, m1, d1] = dia.split("-").map(Number);
+  const [y2, m2, d2] = hoy.split("-").map(Number);
+  const ms = Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1);
+  return Math.max(0, Math.round(ms / 86400000));
+}
+
 function fechaHoy() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 }
@@ -350,6 +364,111 @@ router.get("/compras", async (req, res, next) => {
         idProveedor,
         totalGeneral,
         grupos,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/saldos", async (req, res, next) => {
+  try {
+    const crudo = String(req.query.idCliente || "").trim();
+    let idCliente = null;
+    if (crudo) {
+      idCliente = Number(crudo);
+      if (!Number.isInteger(idCliente) || idCliente <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Seleccione un cliente",
+        });
+      }
+    }
+
+    const filtros = [eq(ferVenta.estado, "FINALIZADA")];
+    if (idCliente) filtros.push(eq(ferCliente.id, idCliente));
+
+    const ventas = await db
+      .select({
+        id: ferVenta.id,
+        numeroVenta: ferVenta.numeroFactura,
+        fecha: ferVenta.fechaVenta,
+        porcentajeDescuento: ferPedido.porcentajeDescuento,
+        idCliente: ferCliente.id,
+        tipoPersona: ferCliente.tipoPersona,
+        razonSocial: ferCliente.razonSocial,
+        primerNombre: ferCliente.primerNombre,
+        primerApellido: ferCliente.primerApellido,
+      })
+      .from(ferVenta)
+      .innerJoin(ferPedido, eq(ferVenta.idPedido, ferPedido.id))
+      .innerJoin(ferCliente, eq(ferPedido.idCliente, ferCliente.id))
+      .where(and(...filtros))
+      .orderBy(asc(ferVenta.fechaVenta), asc(ferVenta.id));
+
+    const ids = ventas.map((venta) => venta.id);
+    const lineasPorVenta = new Map();
+    const pagadoPorVenta = new Map();
+
+    if (ids.length) {
+      const lineas = await db
+        .select({
+          idVenta: ferDetalleVenta.idVenta,
+          cantidad: ferDetalleVenta.cantidad,
+          precioUnitario: ferDetalleVenta.precioUnitario,
+        })
+        .from(ferDetalleVenta)
+        .where(inArray(ferDetalleVenta.idVenta, ids));
+      for (const linea of lineas) {
+        const lista = lineasPorVenta.get(linea.idVenta) || [];
+        lista.push(linea);
+        lineasPorVenta.set(linea.idVenta, lista);
+      }
+
+      const pagos = await db.execute(sql`
+        SELECT "PAG_ID_VENTA"::int AS id,
+               COALESCE(SUM("PAG_MONTO"), 0)::float AS pagado
+        FROM "FER_PAGO"
+        WHERE "PAG_ESTADO" = 'REGISTRADO'
+          AND "PAG_ID_VENTA" IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
+        GROUP BY "PAG_ID_VENTA"
+      `);
+      for (const row of pagos.rows) {
+        pagadoPorVenta.set(Number(row.id), toNumber(row.pagado));
+      }
+    }
+
+    const hoy = fechaHoy();
+    const pendientes = [];
+    for (const venta of ventas) {
+      const lineas = lineasPorVenta.get(venta.id) || [];
+      const subtotal = roundMoney(
+        lineas.reduce((sum, linea) => sum + toNumber(linea.cantidad) * toNumber(linea.precioUnitario), 0)
+      );
+      const descuento = roundMoney(subtotal * (toNumber(venta.porcentajeDescuento) / 100));
+      const total = roundMoney(subtotal - descuento);
+      const pagado = roundMoney(pagadoPorVenta.get(venta.id) || 0);
+      const saldo = roundMoney(total - pagado);
+      if (saldo <= 0) continue;
+      pendientes.push({
+        id: venta.id,
+        cliente: nombreCliente(venta),
+        numeroVenta: venta.numeroVenta,
+        fecha: venta.fecha,
+        total,
+        pagado,
+        saldo,
+        dias: diasDesde(venta.fecha, hoy),
+      });
+    }
+
+    pendientes.sort((a, b) => b.dias - a.dias || a.id - b.id);
+
+    res.json({
+      success: true,
+      data: {
+        idCliente,
+        ventas: pendientes,
       },
     });
   } catch (error) {
