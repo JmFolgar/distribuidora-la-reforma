@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import AppShell from "../layout/AppShell";
+import { descargarReporteExcel } from "../utils/excelReporte";
 import {
   listClientes,
   listProveedores,
@@ -46,6 +47,21 @@ function claseEstadoCompra(estado) {
   return "badge--info";
 }
 
+function formatFechaCsv(iso) {
+  if (!iso) return "";
+  const partes = new Intl.DateTimeFormat("es-GT", {
+    timeZone: "America/Guatemala",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const valor = (tipo) => partes.find((parte) => parte.type === tipo)?.value || "";
+  return `${valor("day")}/${valor("month")}/${valor("year")} ${valor("hour")}:${valor("minute")}`;
+}
+
 function fechaCalendarioValida(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [anio, mes, dia] = value.split("-").map(Number);
@@ -82,6 +98,7 @@ export default function ReportesPage() {
   const [cargandoSaldos, setCargandoSaldos] = useState(false);
   const [errorSaldos, setErrorSaldos] = useState("");
   const [aperturaSaldos, setAperturaSaldos] = useState(0);
+  const [avisoCsv, setAvisoCsv] = useState("");
 
   function validar(inicio, fin) {
     if (!inicio || !fin) return "Indique la fecha inicial y la fecha final";
@@ -211,6 +228,10 @@ export default function ReportesPage() {
   }
 
   useEffect(() => {
+    setAvisoCsv("");
+  }, [tipo]);
+
+  useEffect(() => {
     if (tipo !== "saldos") return undefined;
     let activo = true;
     setCargandoSaldos(true);
@@ -262,6 +283,164 @@ export default function ReportesPage() {
       activo = false;
     };
   }, [tipo, aperturaMinimos]);
+
+  function exportarExcel(opciones, filas) {
+    if (!filas.some((fila) => fila.tipo === "dato")) {
+      setAvisoCsv("No hay datos para exportar.");
+      return;
+    }
+    setAvisoCsv("");
+    descargarReporteExcel({ ...opciones, filas });
+  }
+
+  function exportarVentas() {
+    const filas = (reporte?.ventas || []).map((venta) => ({
+      tipo: "dato",
+      celdas: [
+        formatFechaCsv(venta.fecha),
+        venta.numeroVenta,
+        venta.cliente,
+        Number(venta.descuento),
+        Number(venta.total),
+        venta.vendidoPor,
+      ],
+    }));
+    if (filas.length) {
+      filas.push({
+        tipo: "total",
+        celdas: ["Total general", "", "", "", Number(reporte.totalGeneral), ""],
+      });
+    }
+    const desdeTxt = desde ? desde.split("-").reverse().join("/") : "";
+    const hastaTxt = hasta ? hasta.split("-").reverse().join("/") : "";
+    exportarExcel(
+      {
+        nombre: `ventas-${desde}-a-${hasta}.xls`,
+        hoja: "Ventas",
+        titulo: "Reporte de ventas",
+        detalle: `Del ${desdeTxt} al ${hastaTxt}. Montos en quetzales.`,
+        columnas: [
+          { titulo: "Fecha", tipo: "texto", ancho: 130 },
+          { titulo: "Número de venta", tipo: "texto", ancho: 140 },
+          { titulo: "Cliente", tipo: "texto", ancho: 180 },
+          { titulo: "Descuento %", tipo: "entero", ancho: 110 },
+          { titulo: "Total Q", tipo: "dinero", ancho: 110 },
+          { titulo: "Quién vendió", tipo: "texto", ancho: 160 },
+        ],
+      },
+      filas
+    );
+  }
+
+  function exportarCompras() {
+    const filas = [];
+    for (const grupo of reporteComprasData?.grupos || []) {
+      for (const compra of grupo.compras) {
+        filas.push({
+          tipo: "dato",
+          celdas: [
+            grupo.proveedor,
+            compra.numeroCompra,
+            formatFechaCsv(compra.fecha),
+            compra.estado,
+            Number(compra.total),
+          ],
+        });
+      }
+      if (!reporteComprasData.idProveedor) {
+        filas.push({
+          tipo: "subtotal",
+          celdas: [`Total ${grupo.proveedor}`, "", "", "", Number(grupo.total)],
+        });
+      }
+    }
+    if (filas.some((fila) => fila.tipo === "dato")) {
+      filas.push({
+        tipo: "total",
+        celdas: ["Total general", "", "", "", Number(reporteComprasData.totalGeneral)],
+      });
+    }
+    const desdeTxt = compraDesde ? compraDesde.split("-").reverse().join("/") : "";
+    const hastaTxt = compraHasta ? compraHasta.split("-").reverse().join("/") : "";
+    const proveedor = proveedores.find((item) => String(item.id) === String(compraProveedor));
+    exportarExcel(
+      {
+        nombre: "compras-por-proveedor.xls",
+        hoja: "Compras",
+        titulo: "Compras por proveedor",
+        detalle: `${proveedor ? proveedor.nombre : "Todos los proveedores"}. Del ${desdeTxt} al ${hastaTxt}. Montos en quetzales.`,
+        columnas: [
+          { titulo: "Proveedor", tipo: "texto", ancho: 200 },
+          { titulo: "Número de compra", tipo: "texto", ancho: 150 },
+          { titulo: "Fecha", tipo: "texto", ancho: 130 },
+          { titulo: "Estado", tipo: "texto", ancho: 110 },
+          { titulo: "Total Q", tipo: "dinero", ancho: 110 },
+        ],
+      },
+      filas
+    );
+  }
+
+  function exportarMinimos() {
+    exportarExcel(
+      {
+        nombre: "productos-bajo-minimo.xls",
+        hoja: "Mínimos",
+        titulo: "Productos bajo el mínimo",
+        detalle: "Productos activos con existencia igual o menor a su mínimo.",
+        columnas: [
+          { titulo: "Código", tipo: "texto", ancho: 120 },
+          { titulo: "Producto", tipo: "texto", ancho: 240 },
+          { titulo: "Existencia", tipo: "cantidad", ancho: 110 },
+          { titulo: "Mínimo", tipo: "cantidad", ancho: 110 },
+          { titulo: "Falta para el mínimo", tipo: "cantidad", ancho: 160 },
+        ],
+      },
+      (minimos || []).map((producto) => ({
+        tipo: "dato",
+        celdas: [
+          producto.codigo,
+          producto.nombre,
+          Number(producto.existencia),
+          Number(producto.minimo),
+          Number(producto.faltante),
+        ],
+      }))
+    );
+  }
+
+  function exportarSaldos() {
+    const cliente = clientes.find((item) => String(item.id) === String(clienteSaldo));
+    exportarExcel(
+      {
+        nombre: "pagos-pendientes.xls",
+        hoja: "Saldos",
+        titulo: "Pagos pendientes",
+        detalle: `${cliente ? cliente.nombre : "Todos los clientes"}. Solo ventas con saldo. Montos en quetzales.`,
+        columnas: [
+          { titulo: "Cliente", tipo: "texto", ancho: 180 },
+          { titulo: "Venta", tipo: "texto", ancho: 140 },
+          { titulo: "Fecha", tipo: "texto", ancho: 130 },
+          { titulo: "Total Q", tipo: "dinero", ancho: 100 },
+          { titulo: "Pagado Q", tipo: "dinero", ancho: 100 },
+          { titulo: "Saldo Q", tipo: "dinero", ancho: 100 },
+          { titulo: "Días desde la venta", tipo: "entero", ancho: 140 },
+        ],
+      },
+      (saldos || []).map((venta) => ({
+        tipo: "dato",
+        celdas: [
+          venta.cliente,
+          venta.numeroVenta,
+          formatFechaCsv(venta.fecha),
+          Number(venta.total),
+          Number(venta.pagado),
+          Number(venta.saldo),
+          Number(venta.dias),
+        ],
+      }))
+    );
+  }
 
   async function generar(event) {
     event.preventDefault();
@@ -342,6 +521,12 @@ export default function ReportesPage() {
         </button>
       </div>
 
+      {avisoCsv && (
+        <p className="form-error" role="alert" style={{ marginBottom: "1rem" }}>
+          {avisoCsv}
+        </p>
+      )}
+
       {tipo === "ventas" && (
       <form className="mov-filtros mov-filtros--reporte" onSubmit={generar}>
         <label className="mov-filtros__control mov-filtros__control--date">
@@ -374,6 +559,9 @@ export default function ReportesPage() {
             ) : (
               "Generar reporte"
             )}
+          </button>
+          <button type="button" className="btn btn-ghost btn-inline" onClick={exportarVentas}>
+            Exportar CSV
           </button>
         </div>
       </form>
@@ -481,6 +669,9 @@ export default function ReportesPage() {
                 "Generar reporte"
               )}
             </button>
+            <button type="button" className="btn btn-ghost btn-inline" onClick={exportarCompras}>
+              Exportar CSV
+            </button>
           </div>
         </form>
       )}
@@ -561,6 +752,11 @@ export default function ReportesPage() {
               ))}
             </select>
           </label>
+          <div className="mov-filtros__actions">
+            <button type="button" className="btn btn-ghost btn-inline" onClick={exportarSaldos}>
+              Exportar CSV
+            </button>
+          </div>
         </div>
       )}
 
@@ -614,6 +810,16 @@ export default function ReportesPage() {
             </table>
           </div>
         </section>
+      )}
+
+      {tipo === "minimos" && (
+        <div className="mov-filtros">
+          <div className="mov-filtros__actions">
+            <button type="button" className="btn btn-ghost btn-inline" onClick={exportarMinimos}>
+              Exportar CSV
+            </button>
+          </div>
+        </div>
       )}
 
       {tipo === "minimos" && errorMinimos && (
