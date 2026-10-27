@@ -4,6 +4,7 @@ import {
   EyeOff,
   Filter,
   Loader2,
+  KeyRound,
   Pencil,
   Plus,
   Search,
@@ -19,6 +20,7 @@ import {
   desactivarUsuario,
   listRoles,
   listUsuarios,
+  restablecerContrasena,
   updateUsuario,
 } from "../api/client";
 import {
@@ -70,6 +72,7 @@ export default function UsuariosPage() {
   const [rolesFiltro, setRolesFiltro] = useState([]);
   const [filtroAbierto, setFiltroAbierto] = useState(false);
   const [mostrarClave, setMostrarClave] = useState(false);
+  const [aviso, setAviso] = useState("");
 
   const usuariosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -194,6 +197,42 @@ export default function UsuariosPage() {
         setFieldErrors(err.body.fields);
       }
       setFormError(err.message || "No se pudo guardar el usuario");
+      setGuardando(false);
+    }
+  }
+
+  function abrirRestablecer(usuario) {
+    setModal("restablecer");
+    setEditando(usuario);
+    setForm(EMPTY_FORM);
+    setFieldErrors({});
+    setFormError("");
+    setMostrarClave(false);
+    setAviso("");
+  }
+
+  async function confirmarRestablecer(e) {
+    e.preventDefault();
+    if (!editando) return;
+    setFormError("");
+    if (!form.contrasena) {
+      setFieldErrors({ contrasena: "La contraseña es obligatoria" });
+      return;
+    }
+    if (!contrasenaValida(form.contrasena)) {
+      setFieldErrors({ contrasena: MENSAJE_CONTRASENA });
+      return;
+    }
+    setGuardando(true);
+    try {
+      await restablecerContrasena(editando.id, form.contrasena);
+      window.dispatchEvent(new Event("claves-alertas"));
+      setAviso(`La contraseña de ${editando.nombre} quedó restablecida.`);
+      setGuardando(false);
+      cerrarModal(true);
+    } catch (err) {
+      if (err.body?.fields) setFieldErrors(err.body.fields);
+      setFormError(err.message || "No se pudo restablecer la contraseña");
       setGuardando(false);
     }
   }
@@ -331,6 +370,12 @@ export default function UsuariosPage() {
         )}
       </div>
 
+      {aviso && (
+        <p className="form-ok" role="status" style={{ marginBottom: "1rem" }}>
+          {aviso}
+        </p>
+      )}
+
       <section className="card table-card">
         {loading ? (
           <p className="status-pending">
@@ -366,6 +411,15 @@ export default function UsuariosPage() {
                     </td>
                     <td>
                       <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn-action btn-action--neutral"
+                          onClick={() => abrirRestablecer(u)}
+                          title="Restablecer contraseña"
+                        >
+                          <KeyRound size={14} strokeWidth={1.75} />
+                          Restablecer
+                        </button>
                         <button
                           type="button"
                           className="btn-action btn-action--edit"
@@ -426,7 +480,73 @@ export default function UsuariosPage() {
             aria-labelledby="usuarios-modal-title"
             onClick={(e) => e.stopPropagation()}
           >
-            {modal === "desactivar" || modal === "activar" ? (
+            {modal === "restablecer" ? (
+              <>
+                <h2 id="usuarios-modal-title">Restablecer contraseña</h2>
+                <p className="page-subtitle">
+                  Escribe la nueva contraseña de <strong>{editando?.nombre}</strong>.
+                  Avísale para que pueda entrar. La alerta de la campana se quita al guardar.
+                </p>
+                <form className="modal-form" onSubmit={confirmarRestablecer} noValidate>
+                  <label className={`field ${fieldErrors.contrasena ? "field--error" : ""}`}>
+                    <span>Nueva contraseña</span>
+                    <div className="field-password">
+                      <input
+                        type={mostrarClave ? "text" : "password"}
+                        name="contrasena"
+                        value={form.contrasena}
+                        onChange={onChange}
+                        placeholder="Mín. 8, mayúscula, número y símbolo"
+                        disabled={guardando}
+                        autoComplete="new-password"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="field-password__toggle"
+                        onClick={() => setMostrarClave((v) => !v)}
+                        aria-label={mostrarClave ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        disabled={guardando}
+                      >
+                        {mostrarClave ? (
+                          <EyeOff size={18} strokeWidth={1.75} />
+                        ) : (
+                          <Eye size={18} strokeWidth={1.75} />
+                        )}
+                      </button>
+                    </div>
+                    {fieldErrors.contrasena && (
+                      <em className="field-error">{fieldErrors.contrasena}</em>
+                    )}
+                  </label>
+                  {formError && (
+                    <p className="form-error" role="alert">
+                      {formError}
+                    </p>
+                  )}
+                  <div className="modal-actions">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => cerrarModal()}
+                      disabled={guardando}
+                    >
+                      Cerrar
+                    </button>
+                    <button type="submit" className="btn-save" disabled={guardando}>
+                      {guardando ? (
+                        <>
+                          <Loader2 size={16} className="spin" />
+                          Guardando…
+                        </>
+                      ) : (
+                        "Guardar"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : modal === "desactivar" || modal === "activar" ? (
               <>
                 <div
                   className={`modal-confirm-icon ${modal === "activar" ? "modal-confirm-icon--success" : ""}`}

@@ -73,6 +73,17 @@ export const ferUsuario = pgTable("FER_USUARIO", {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const ferSolicitudClave = pgTable("FER_SOLICITUD_CLAVE", {
+  id: bigint("SCL_ID_SOLICITUD", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idUsuario: bigint("SCL_ID_USUARIO", { mode: "number" }).notNull(),
+  fecha: timestamp("SCL_FECHA", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  estado: varchar("SCL_ESTADO", { length: 15 }).notNull().default("PENDIENTE"),
+});
+
 export const ferRol = pgTable("FER_ROL", {
   id: bigint("ROL_ID_ROL", { mode: "number" })
     .generatedByDefaultAsIdentity()

@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import NovaMark from "../components/NovaMark";
 import loginIllustration from "../assets/login_patron_hexagonal_nova.svg";
+import { solicitarRestablecerClave } from "../api/client";
 import { correoValido } from "../utils/validacion";
 
 const HIGHLIGHTS = [
@@ -27,7 +28,11 @@ export default function LoginPage() {
   const [mostrarClave, setMostrarClave] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
-  const [hintRecuperacion, setHintRecuperacion] = useState(false);
+  const [pedirClave, setPedirClave] = useState(false);
+  const [correoAviso, setCorreoAviso] = useState("");
+  const [avisoClave, setAvisoClave] = useState("");
+  const [errorClave, setErrorClave] = useState("");
+  const [enviandoAviso, setEnviandoAviso] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   if (!loading && isAuthenticated) {
@@ -38,7 +43,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setFieldErrors({});
-    setHintRecuperacion(false);
+    setPedirClave(false);
+    setAvisoClave("");
 
     const correoTrim = correo.trim();
     const fields = {};
@@ -59,6 +65,30 @@ export default function LoginPage() {
       setError(err.message || "Correo o contraseña incorrectos");
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function avisarAdministrador() {
+    setErrorClave("");
+    setAvisoClave("");
+    const correoTrim = correoAviso.trim();
+    if (!correoTrim) {
+      setErrorClave("El correo es obligatorio");
+      return;
+    }
+    if (!correoValido(correoTrim)) {
+      setErrorClave("Correo inválido");
+      return;
+    }
+    setEnviandoAviso(true);
+    try {
+      const res = await solicitarRestablecerClave(correoTrim);
+      setAvisoClave(res.message || "Avisamos al administrador. Él restablecerá tu contraseña.");
+      setPedirClave(false);
+    } catch (err) {
+      setErrorClave(err.message || "No se pudo avisar al administrador");
+    } finally {
+      setEnviandoAviso(false);
     }
   }
 
@@ -176,15 +206,60 @@ export default function LoginPage() {
             <button
               type="button"
               className="link-muted"
-              onClick={() => setHintRecuperacion(true)}
+              onClick={() => {
+                setPedirClave(true);
+                setCorreoAviso(correo.trim());
+                setErrorClave("");
+                setAvisoClave("");
+              }}
             >
               ¿Olvidaste tu contraseña?
             </button>
           </div>
 
-          {hintRecuperacion && (
+          {pedirClave && (
+            <div className="login-recupera">
+              <label className={`field ${errorClave ? "field--error" : ""}`}>
+                <span>Correo de tu cuenta</span>
+                <input
+                  type="email"
+                  name="correo-aviso"
+                  autoComplete="username"
+                  value={correoAviso}
+                  onChange={(e) => {
+                    setCorreoAviso(e.target.value);
+                    setErrorClave("");
+                  }}
+                  placeholder="correo@ejemplo.com"
+                  disabled={enviandoAviso}
+                />
+              </label>
+              {errorClave && (
+                <p className="form-error" role="alert">
+                  {errorClave}
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={avisarAdministrador}
+                disabled={enviandoAviso}
+              >
+                {enviandoAviso ? (
+                  <>
+                    <Loader2 size={16} strokeWidth={2} className="spin" aria-hidden />
+                    Avisando…
+                  </>
+                ) : (
+                  "Avisar al administrador"
+                )}
+              </button>
+            </div>
+          )}
+
+          {avisoClave && (
             <p className="form-hint" role="status">
-              Contacta al administrador para restablecer tu acceso.
+              {avisoClave}
             </p>
           )}
 

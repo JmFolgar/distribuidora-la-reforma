@@ -519,6 +519,17 @@
   text-align: left;
 }
 
+.login-recupera {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.login-recupera .btn-ghost {
+  align-self: flex-start;
+}
+
 .login-card__meta {
   display: flex;
   justify-content: flex-end;

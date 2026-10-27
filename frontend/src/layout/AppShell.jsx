@@ -113,7 +113,9 @@ export default function AppShell({ children, title, subtitle, actions }) {
 
           <div className="topbar__actions">
             {(usuario?.rol === "ADMINISTRADOR" ||
-              usuario?.rol === "SUPERVISOR") && <AlertasMenu />}
+              usuario?.rol === "SUPERVISOR") && (
+              <AlertasMenu esAdmin={usuario?.rol === "ADMINISTRADOR"} />
+            )}
 
             <div className="user-menu">
               <button

@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Bell } from "lucide-react";
-import { listAlertasInventario } from "../api/client";
+import { listAlertasInventario, listSolicitudesClave } from "../api/client";
 
-export default function AlertasMenu() {
+function formatFecha(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("es-GT", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+export default function AlertasMenu({ esAdmin = false }) {
   const location = useLocation();
   const [alertas, setAlertas] = useState([]);
+  const [claves, setClaves] = useState([]);
   const [abierto, setAbierto] = useState(false);
   const [error, setError] = useState("");
 
@@ -17,7 +26,17 @@ export default function AlertasMenu() {
     } catch (err) {
       setError(err.message || "No se pudieron cargar las alertas");
     }
-  }, []);
+    if (!esAdmin) {
+      setClaves([]);
+      return;
+    }
+    try {
+      const res = await listSolicitudesClave();
+      setClaves(res.data || []);
+    } catch {
+      setClaves([]);
+    }
+  }, [esAdmin]);
 
   useEffect(() => {
     cargar();
@@ -28,27 +47,25 @@ export default function AlertasMenu() {
       cargar();
     }
     window.addEventListener("inventario-alertas", refrescar);
+    window.addEventListener("claves-alertas", refrescar);
     window.addEventListener("focus", refrescar);
     return () => {
       window.removeEventListener("inventario-alertas", refrescar);
+      window.removeEventListener("claves-alertas", refrescar);
       window.removeEventListener("focus", refrescar);
     };
   }, [cargar]);
 
-  const total = alertas.length;
+  const total = alertas.length + claves.length;
 
   return (
     <div className="alertas">
       <button
         type="button"
         className="icon-btn alertas__trigger"
-        aria-label={
-          total > 0
-            ? `Alertas de existencia, ${total}`
-            : "Alertas de existencia"
-        }
+        aria-label={total > 0 ? `Alertas, ${total}` : "Alertas"}
         aria-expanded={abierto}
-        title="Existencia mínima"
+        title="Alertas"
         onClick={() => {
           setAbierto((v) => !v);
           cargar();
@@ -68,10 +85,10 @@ export default function AlertasMenu() {
             aria-label="Cerrar alertas"
             onClick={() => setAbierto(false)}
           />
-          <div className="alertas__panel" role="dialog" aria-label="Productos en existencia mínima">
+          <div className="alertas__panel" role="dialog" aria-label="Alertas">
             <p className="alertas__title">Existencia mínima</p>
             {error && <p className="alertas__empty">{error}</p>}
-            {!error && total === 0 && (
+            {!error && alertas.length === 0 && (
               <p className="alertas__empty">No hay productos en el mínimo.</p>
             )}
             {!error &&
@@ -84,6 +101,22 @@ export default function AlertasMenu() {
                   </span>
                 </div>
               ))}
+            {esAdmin && (
+              <>
+                <p className="alertas__title">Contraseñas</p>
+                {claves.length === 0 ? (
+                  <p className="alertas__empty">Nadie ha pedido restablecer su contraseña.</p>
+                ) : (
+                  claves.map((solicitud) => (
+                    <div key={solicitud.id} className="alertas__item">
+                      <strong>{solicitud.nombre} olvidó su contraseña</strong>
+                      <span className="alertas__meta">{solicitud.correo}</span>
+                      <span className="alertas__meta">{formatFecha(solicitud.fecha)}</span>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
           </div>
         </>
       )}

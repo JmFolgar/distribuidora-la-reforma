@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { ferUsuario, ferRol, ferUsuarioRol } from "../db/schema.js";
+import { ferUsuario, ferRol, ferUsuarioRol, ferSolicitudClave } from "../db/schema.js";
 import { requireAuth, signToken } from "../middleware/auth.js";
 import { registrarAuditoria } from "../auditoria.js";
 
@@ -180,6 +180,67 @@ router.get("/me", requireAuth, async (req, res, next) => {
         rol: roles[0]?.nombre ?? null,
         roles: roles.map((r) => r.nombre),
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/olvido", async (req, res, next) => {
+  try {
+    const correo = String(req.body?.correo || "").trim().toLowerCase();
+    if (!correo) {
+      return res.status(400).json({ success: false, message: "El correo es obligatorio" });
+    }
+    if (!z.string().email().safeParse(correo).success) {
+      return res.status(400).json({ success: false, message: "Correo inválido" });
+    }
+
+    const [usuario] = await db
+      .select()
+      .from(ferUsuario)
+      .where(sql`LOWER(${ferUsuario.correo}) = ${correo}`)
+      .limit(1);
+
+    if (!usuario) {
+      return res.status(404).json({
+        success: false,
+        message: "No hay una cuenta con ese correo",
+      });
+    }
+    if (usuario.estado !== "A") {
+      return res.status(400).json({
+        success: false,
+        message: "Su usuario no está activo. Contacte al administrador para recuperar el acceso.",
+      });
+    }
+
+    const [pendiente] = await db
+      .select({ id: ferSolicitudClave.id })
+      .from(ferSolicitudClave)
+      .where(
+        and(
+          eq(ferSolicitudClave.idUsuario, usuario.id),
+          eq(ferSolicitudClave.estado, "PENDIENTE")
+        )
+      )
+      .limit(1);
+
+    if (pendiente) {
+      await db
+        .update(ferSolicitudClave)
+        .set({ fecha: new Date() })
+        .where(eq(ferSolicitudClave.id, pendiente.id));
+    } else {
+      await db.insert(ferSolicitudClave).values({
+        idUsuario: usuario.id,
+        estado: "PENDIENTE",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Avisamos al administrador. Él restablecerá tu contraseña.",
     });
   } catch (err) {
     next(err);

@@ -59,6 +59,13 @@ export function getHealth() {
   return apiRequest("/health");
 }
 
+export function solicitarRestablecerClave(correo) {
+  return apiRequest("/auth/olvido", {
+    method: "POST",
+    body: JSON.stringify({ correo }),
+  });
+}
+
 export function login(correo, contrasena) {
   return apiRequest("/auth/login", {
     method: "POST",
@@ -93,6 +100,17 @@ export function updateUsuario(id, payload) {
   return apiRequest(`/usuarios/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function listSolicitudesClave() {
+  return apiRequest("/usuarios/solicitudes-clave");
+}
+
+export function restablecerContrasena(id, contrasena) {
+  return apiRequest(`/usuarios/${id}/contrasena`, {
+    method: "PATCH",
+    body: JSON.stringify({ contrasena }),
   });
 }
 

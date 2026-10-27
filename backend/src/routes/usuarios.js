@@ -1,9 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { eq, sql, and, asc } from "drizzle-orm";
+import { eq, sql, and, asc, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { ferUsuario, ferRol, ferUsuarioRol } from "../db/schema.js";
+import { ferUsuario, ferRol, ferUsuarioRol, ferSolicitudClave } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { contrasenaSchema, nombrePersonaSchema } from "../validacion.js";
 import { registrarAuditoria } from "../auditoria.js";
@@ -464,6 +464,117 @@ router.patch("/:id/activar", async (req, res, next) => {
       success: true,
       data: await mapUsuario(actualizado),
       message: "Usuario activado correctamente",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/solicitudes-clave", async (_req, res, next) => {
+  try {
+    const rows = await db
+      .select({
+        id: ferSolicitudClave.id,
+        fecha: ferSolicitudClave.fecha,
+        idUsuario: ferUsuario.id,
+        nombreUsuario: ferUsuario.nombreUsuario,
+        correo: ferUsuario.correo,
+        primerNombre: ferUsuario.primerNombre,
+        segundoNombre: ferUsuario.segundoNombre,
+        primerApellido: ferUsuario.primerApellido,
+        segundoApellido: ferUsuario.segundoApellido,
+      })
+      .from(ferSolicitudClave)
+      .innerJoin(ferUsuario, eq(ferSolicitudClave.idUsuario, ferUsuario.id))
+      .where(eq(ferSolicitudClave.estado, "PENDIENTE"))
+      .orderBy(desc(ferSolicitudClave.fecha));
+
+    res.json({
+      success: true,
+      data: rows.map((row) => ({
+        id: row.id,
+        fecha: row.fecha,
+        idUsuario: row.idUsuario,
+        nombreUsuario: row.nombreUsuario,
+        correo: row.correo,
+        nombre: [
+          row.primerNombre,
+          row.segundoNombre,
+          row.primerApellido,
+          row.segundoApellido,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/:id/contrasena", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Identificador de usuario inválido",
+      });
+    }
+
+    const parsed = z.object({ contrasena: contrasenaSchema }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || "La contraseña no es válida",
+        fields: fieldErrorsFromZod(parsed.error),
+      });
+    }
+
+    const [usuario] = await db
+      .select()
+      .from(ferUsuario)
+      .where(eq(ferUsuario.id, id))
+      .limit(1);
+
+    if (!usuario) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuario no encontrado",
+      });
+    }
+
+    const claveHash = await bcrypt.hash(parsed.data.contrasena, 10);
+    await db
+      .update(ferUsuario)
+      .set({
+        claveHash,
+        intentosFallidos: 0,
+        fechaBloqueo: null,
+        fechaModificacion: new Date(),
+      })
+      .where(eq(ferUsuario.id, id));
+
+    await db
+      .update(ferSolicitudClave)
+      .set({ estado: "ATENDIDA" })
+      .where(
+        and(eq(ferSolicitudClave.idUsuario, id), eq(ferSolicitudClave.estado, "PENDIENTE"))
+      );
+
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "USUARIOS",
+      accion: "MODIFICAR",
+      entidad: "FER_USUARIO",
+      idRegistro: id,
+      registro: usuario.nombreUsuario,
+      mensaje: `Restableció la contraseña de ${usuario.nombreUsuario}`,
+    });
+
+    res.json({
+      success: true,
+      message: "Contraseña restablecida",
     });
   } catch (err) {
     next(err);
