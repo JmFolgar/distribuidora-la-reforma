@@ -6,6 +6,7 @@ import { db } from "../db/index.js";
 import { ferUsuario, ferRol, ferUsuarioRol } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { contrasenaSchema, nombrePersonaSchema } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -221,6 +222,17 @@ router.post("/", async (req, res, next) => {
       estado: "A",
     });
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "USUARIOS",
+      accion: "CREAR",
+      entidad: "FER_USUARIO",
+      idRegistro: creado.id,
+      registro: creado.nombreUsuario,
+      valorNuevo: { rol, correo: creado.correo },
+      mensaje: `Alta del usuario ${creado.nombreUsuario}`,
+    });
+
     res.status(201).json({
       success: true,
       data: await mapUsuario(creado),
@@ -315,6 +327,18 @@ router.patch("/:id", async (req, res, next) => {
       });
     }
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "USUARIOS",
+      accion: "MODIFICAR",
+      entidad: "FER_USUARIO",
+      idRegistro: id,
+      registro: actualizado.nombreUsuario,
+      valorAnterior: { rol: rolActual },
+      valorNuevo: { rol, nombre: `${primerNombre} ${primerApellido}`.trim() },
+      mensaje: `Modificación del usuario ${actualizado.nombreUsuario}`,
+    });
+
     res.json({
       success: true,
       data: await mapUsuario(actualizado),
@@ -372,6 +396,16 @@ router.patch("/:id/desactivar", async (req, res, next) => {
       .where(eq(ferUsuario.id, id))
       .returning();
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "USUARIOS",
+      accion: "DESACTIVAR",
+      entidad: "FER_USUARIO",
+      idRegistro: id,
+      registro: actualizado.nombreUsuario,
+      mensaje: `Se desactivó a ${actualizado.nombreUsuario}`,
+    });
+
     res.json({
       success: true,
       data: await mapUsuario(actualizado),
@@ -415,6 +449,16 @@ router.patch("/:id/activar", async (req, res, next) => {
       })
       .where(eq(ferUsuario.id, id))
       .returning();
+
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "USUARIOS",
+      accion: "ACTIVAR",
+      entidad: "FER_USUARIO",
+      idRegistro: id,
+      registro: actualizado.nombreUsuario,
+      mensaje: `Se activó a ${actualizado.nombreUsuario}`,
+    });
 
     res.json({
       success: true,

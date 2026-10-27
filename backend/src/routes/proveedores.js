@@ -16,6 +16,7 @@ import {
   personaContactoSchema,
   telefonoOpcionalSchema,
 } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -189,6 +190,16 @@ router.post("/", requireRole(...ROLES_ESCRITURA), async (req, res, next) => {
       })
       .returning();
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PROVEEDORES",
+      accion: "CREAR",
+      entidad: "FER_PROVEEDOR",
+      idRegistro: creado.id,
+      registro: creado.nit,
+      mensaje: `Alta del proveedor ${creado.razonSocial}`,
+    });
+
     res.status(201).json({
       success: true,
       data: mapProveedor(creado),
@@ -247,6 +258,16 @@ router.patch(
         .where(eq(ferProveedor.id, id))
         .returning();
 
+      await registrarAuditoria({
+        idUsuario: Number(req.user.sub),
+        modulo: "PROVEEDORES",
+        accion: "DESACTIVAR",
+        entidad: "FER_PROVEEDOR",
+        idRegistro: id,
+        registro: actualizado.nit,
+        mensaje: `Se desactivó al proveedor ${actualizado.razonSocial}`,
+      });
+
       res.json({
         success: true,
         data: mapProveedor(actualizado),
@@ -289,6 +310,16 @@ router.patch(
         .set({ estado: "A" })
         .where(eq(ferProveedor.id, id))
         .returning();
+
+      await registrarAuditoria({
+        idUsuario: Number(req.user.sub),
+        modulo: "PROVEEDORES",
+        accion: "ACTIVAR",
+        entidad: "FER_PROVEEDOR",
+        idRegistro: id,
+        registro: actualizado.nit,
+        mensaje: `Se activó al proveedor ${actualizado.razonSocial}`,
+      });
 
       res.json({
         success: true,

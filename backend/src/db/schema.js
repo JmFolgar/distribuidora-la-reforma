@@ -7,6 +7,8 @@ import {
   numeric,
   timestamp,
   date,
+  boolean,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -305,4 +307,202 @@ export const ferInventario = pgTable("FER_INVENTARIO", {
     withTimezone: true,
   }),
   version: integer("INV_VERSION").notNull().default(0),
+});
+
+export const ferEstadoPedido = pgTable("FER_ESTADO_PEDIDO", {
+  id: bigint("EPE_ID_ESTADO_PEDIDO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  codigo: varchar("EPE_CODIGO", { length: 30 }).notNull(),
+  nombre: varchar("EPE_NOMBRE", { length: 80 }).notNull(),
+  orden: integer("EPE_ORDEN").notNull(),
+  permiteModificar: boolean("EPE_PERMITE_MODIFICAR").notNull().default(false),
+  permiteFacturar: boolean("EPE_PERMITE_FACTURAR").notNull().default(false),
+  estado: char("EPE_ESTADO", { length: 1 }).notNull().default("A"),
+});
+
+export const ferPedido = pgTable("FER_PEDIDO", {
+  id: bigint("PED_ID_PEDIDO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idCliente: bigint("PED_ID_CLIENTE", { mode: "number" }).notNull(),
+  idEstadoPedido: bigint("PED_ID_ESTADO_PEDIDO", { mode: "number" }).notNull(),
+  idDescuento: bigint("PED_ID_DESCUENTO", { mode: "number" }),
+  numeroPedido: varchar("PED_NUMERO_PEDIDO", { length: 40 }).notNull(),
+  fechaPedido: timestamp("PED_FECHA_PEDIDO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  fechaRequerida: date("PED_FECHA_REQUERIDA"),
+  porcentajeDescuento: numeric("PED_PORCENTAJE_DESCUENTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  observacion: varchar("PED_OBSERVACION", { length: 500 }),
+});
+
+export const ferDetallePedido = pgTable("FER_DETALLE_PEDIDO", {
+  id: bigint("DPE_ID_DETALLE_PEDIDO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idPedido: bigint("DPE_ID_PEDIDO", { mode: "number" }).notNull(),
+  idProducto: bigint("DPE_ID_PRODUCTO", { mode: "number" }).notNull(),
+  cantidad: numeric("DPE_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  precioUnitario: numeric("DPE_PRECIO_UNITARIO", {
+    precision: 14,
+    scale: 2,
+  }).notNull(),
+  porcentajeDescuento: numeric("DPE_PORCENTAJE_DESCUENTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  porcentajeImpuesto: numeric("DPE_PORCENTAJE_IMPUESTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+});
+
+export const ferHistorialPedido = pgTable("FER_HISTORIAL_PEDIDO", {
+  id: bigint("HPE_ID_HISTORIAL_PEDIDO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idPedido: bigint("HPE_ID_PEDIDO", { mode: "number" }).notNull(),
+  idEstadoAnterior: bigint("HPE_ID_ESTADO_ANTERIOR", { mode: "number" }),
+  idEstadoNuevo: bigint("HPE_ID_ESTADO_NUEVO", { mode: "number" }).notNull(),
+  idUsuario: bigint("HPE_ID_USUARIO", { mode: "number" }).notNull(),
+  fechaCambio: timestamp("HPE_FECHA_CAMBIO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  observacion: varchar("HPE_OBSERVACION", { length: 500 }),
+});
+
+export const ferAprobacion = pgTable("FER_APROBACION", {
+  id: bigint("APR_ID_APROBACION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idPedido: bigint("APR_ID_PEDIDO", { mode: "number" }).notNull(),
+  idUsuarioSolicita: bigint("APR_ID_USUARIO_SOLICITA", { mode: "number" }).notNull(),
+  idUsuarioAutoriza: bigint("APR_ID_USUARIO_AUTORIZA", { mode: "number" }),
+  tipoAprobacion: varchar("APR_TIPO_APROBACION", { length: 30 }).notNull(),
+  valorSolicitado: numeric("APR_VALOR_SOLICITADO", {
+    precision: 14,
+    scale: 2,
+  }).notNull(),
+  valorPermitido: numeric("APR_VALOR_PERMITIDO", {
+    precision: 14,
+    scale: 2,
+  }).notNull(),
+  estado: varchar("APR_ESTADO", { length: 15 }).notNull().default("PENDIENTE"),
+  fechaSolicitud: timestamp("APR_FECHA_SOLICITUD", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  fechaRespuesta: timestamp("APR_FECHA_RESPUESTA", { withTimezone: true }),
+  observacion: varchar("APR_OBSERVACION", { length: 500 }),
+});
+
+export const ferAuditoria = pgTable("FER_AUDITORIA", {
+  id: bigint("AUD_ID_AUDITORIA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idUsuario: bigint("AUD_ID_USUARIO", { mode: "number" }).notNull(),
+  fechaEvento: timestamp("AUD_FECHA_EVENTO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  modulo: varchar("AUD_MODULO", { length: 60 }).notNull(),
+  accion: varchar("AUD_ACCION", { length: 60 }).notNull(),
+  entidad: varchar("AUD_ENTIDAD", { length: 80 }).notNull(),
+  idRegistro: bigint("AUD_ID_REGISTRO", { mode: "number" }).notNull(),
+  valorAnterior: jsonb("AUD_VALOR_ANTERIOR"),
+  valorNuevo: jsonb("AUD_VALOR_NUEVO"),
+  resultado: varchar("AUD_RESULTADO", { length: 10 }).notNull(),
+  mensaje: varchar("AUD_MENSAJE", { length: 500 }),
+});
+
+export const ferVenta = pgTable("FER_VENTA", {
+  id: bigint("VEN_ID_VENTA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idPedido: bigint("VEN_ID_PEDIDO", { mode: "number" }).notNull(),
+  numeroFactura: varchar("VEN_NUMERO_FACTURA", { length: 40 }).notNull(),
+  fechaVenta: timestamp("VEN_FECHA_VENTA", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  estado: varchar("VEN_ESTADO", { length: 15 }).notNull().default("BORRADOR"),
+  fechaFinalizacion: timestamp("VEN_FECHA_FINALIZACION", { withTimezone: true }),
+});
+
+export const ferDetalleVenta = pgTable("FER_DETALLE_VENTA", {
+  id: bigint("DVE_ID_DETALLE_VENTA", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idVenta: bigint("DVE_ID_VENTA", { mode: "number" }).notNull(),
+  idDetallePedido: bigint("DVE_ID_DETALLE_PEDIDO", { mode: "number" }).notNull(),
+  cantidad: numeric("DVE_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
+  precioUnitario: numeric("DVE_PRECIO_UNITARIO", { precision: 14, scale: 2 }).notNull(),
+  costoUnitario: numeric("DVE_COSTO_UNITARIO", { precision: 14, scale: 2 }).notNull(),
+  porcentajeDescuento: numeric("DVE_PORCENTAJE_DESCUENTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  porcentajeImpuesto: numeric("DVE_PORCENTAJE_IMPUESTO", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+});
+
+export const ferMetodoPago = pgTable("FER_METODO_PAGO", {
+  id: bigint("MPA_ID_METODO_PAGO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  codigo: varchar("MPA_CODIGO", { length: 30 }).notNull(),
+  nombre: varchar("MPA_NOMBRE", { length: 80 }).notNull(),
+  requiereReferencia: boolean("MPA_REQUIERE_REFERENCIA").notNull().default(false),
+  estado: char("MPA_ESTADO", { length: 1 }).notNull().default("A"),
+});
+
+export const ferPago = pgTable("FER_PAGO", {
+  id: bigint("PAG_ID_PAGO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idVenta: bigint("PAG_ID_VENTA", { mode: "number" }).notNull(),
+  idMetodoPago: bigint("PAG_ID_METODO_PAGO", { mode: "number" }).notNull(),
+  numeroPago: varchar("PAG_NUMERO_PAGO", { length: 40 }).notNull(),
+  fechaPago: timestamp("PAG_FECHA_PAGO", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  monto: numeric("PAG_MONTO", { precision: 14, scale: 2 }).notNull(),
+  referencia: varchar("PAG_REFERENCIA", { length: 100 }),
+  estado: varchar("PAG_ESTADO", { length: 15 }).notNull().default("REGISTRADO"),
+  observacion: varchar("PAG_OBSERVACION", { length: 500 }),
+});
+
+export const ferDevolucion = pgTable("FER_DEVOLUCION", {
+  id: bigint("DEV_ID_DEVOLUCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idVenta: bigint("DEV_ID_VENTA", { mode: "number" }).notNull(),
+  idUsuario: bigint("DEV_ID_USUARIO", { mode: "number" }).notNull(),
+  numeroDevolucion: varchar("DEV_NUMERO_DEVOLUCION", { length: 40 }).notNull(),
+  fechaDevolucion: timestamp("DEV_FECHA_DEVOLUCION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  motivo: varchar("DEV_MOTIVO", { length: 300 }).notNull(),
+});
+
+export const ferDetalleDevolucion = pgTable("FER_DETALLE_DEVOLUCION", {
+  id: bigint("DDE_ID_DETALLE_DEVOLUCION", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idDevolucion: bigint("DDE_ID_DEVOLUCION", { mode: "number" }).notNull(),
+  idDetalleVenta: bigint("DDE_ID_DETALLE_VENTA", { mode: "number" }).notNull(),
+  cantidad: numeric("DDE_CANTIDAD", { precision: 14, scale: 3 }).notNull(),
 });

@@ -12,6 +12,12 @@ import ubicacionesRouter from "./routes/ubicaciones.js";
 import proveedoresRouter from "./routes/proveedores.js";
 import comprasRouter from "./routes/compras.js";
 import inventarioRouter from "./routes/inventario.js";
+import pedidosRouter from "./routes/pedidos.js";
+import ventasRouter from "./routes/ventas.js";
+import devolucionesRouter from "./routes/devoluciones.js";
+import pagosRouter from "./routes/pagos.js";
+import auditoriaRouter from "./routes/auditoria.js";
+import reportesRouter from "./routes/reportes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -43,6 +49,12 @@ app.use("/api/ubicaciones", ubicacionesRouter);
 app.use("/api/proveedores", proveedoresRouter);
 app.use("/api/compras", comprasRouter);
 app.use("/api/inventario", inventarioRouter);
+app.use("/api/pedidos", pedidosRouter);
+app.use("/api/ventas", ventasRouter);
+app.use("/api/ventas", devolucionesRouter);
+app.use("/api/pagos", pagosRouter);
+app.use("/api/auditoria", auditoriaRouter);
+app.use("/api/reportes", reportesRouter);
 
 app.use(notFound);
 app.use(errorHandler);

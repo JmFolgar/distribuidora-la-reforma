@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { ferUsuario, ferRol, ferUsuarioRol } from "../db/schema.js";
 import { requireAuth, signToken } from "../middleware/auth.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -113,6 +114,16 @@ router.post("/login", async (req, res, next) => {
       nombreUsuario: usuario.nombreUsuario,
       rol: rolPrincipal.nombre,
       roles: roles.map((r) => r.nombre),
+    });
+
+    await registrarAuditoria({
+      idUsuario: usuario.id,
+      modulo: "SESION",
+      accion: "LOGIN",
+      entidad: "FER_USUARIO",
+      idRegistro: usuario.id,
+      registro: usuario.nombreUsuario,
+      mensaje: `${usuario.nombreUsuario} inició sesión`,
     });
 
     return res.json({

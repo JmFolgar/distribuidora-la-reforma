@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ImageOff, Loader2, Pencil, Plus, Search, Trash2, UserCheck, X, ZoomIn } from "lucide-react";
+import { ImageOff, Loader2, Pencil, Plus, Trash2, UserCheck, X, ZoomIn } from "lucide-react";
 import AppShell from "../layout/AppShell";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -12,6 +12,13 @@ import {
   updateProducto,
 } from "../api/client";
 import { enteroValido, montoValido } from "../utils/validacion";
+
+const FILTROS_PRODUCTO = {
+  nombre: "",
+  codigo: "",
+  idCategoria: "",
+  conExistencia: false,
+};
 
 const EMPTY_FORM = {
   codigo: "",
@@ -82,7 +89,7 @@ export default function ProductosPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState(FILTROS_PRODUCTO);
   const [confirmacion, setConfirmacion] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [imagen, setImagen] = useState(null);
@@ -90,15 +97,24 @@ export default function ProductosPage() {
   const [imagenAmpliada, setImagenAmpliada] = useState(null);
 
   const productosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    if (!q) return productos;
-    return productos.filter(
-      (p) =>
-        (p.codigo || "").toLowerCase().includes(q) ||
-        (p.nombre || "").toLowerCase().includes(q) ||
-        (p.categoria || "").toLowerCase().includes(q)
-    );
-  }, [productos, busqueda]);
+    const nombre = filtros.nombre.trim().toLowerCase();
+    const codigo = filtros.codigo.trim().toLowerCase();
+    return productos.filter((producto) => {
+      if (nombre && !(producto.nombre || "").toLowerCase().includes(nombre)) return false;
+      if (codigo && !(producto.codigo || "").toLowerCase().includes(codigo)) return false;
+      if (filtros.idCategoria && String(producto.idCategoria) !== filtros.idCategoria) return false;
+      if (filtros.conExistencia && Number(producto.existencia) <= 0) return false;
+      return true;
+    });
+  }, [productos, filtros]);
+
+  const hayFiltrosProducto = Boolean(
+    filtros.nombre.trim() || filtros.codigo.trim() || filtros.idCategoria || filtros.conExistencia
+  );
+
+  function limpiarFiltrosProducto() {
+    setFiltros(FILTROS_PRODUCTO);
+  }
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -312,24 +328,60 @@ export default function ProductosPage() {
         </p>
       )}
 
-      <div className="toolbar">
-        <label className="toolbar-search">
-          <Search size={16} strokeWidth={1.75} aria-hidden />
+      <form className="mov-filtros" onSubmit={(e) => e.preventDefault()}>
+        <label className="mov-filtros__control">
+          <span>Nombre</span>
           <input
             type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por código o nombre…"
-            aria-label="Buscar productos por código o nombre"
+            value={filtros.nombre}
+            placeholder="Parte del nombre"
+            onChange={(e) => setFiltros((actual) => ({ ...actual, nombre: e.target.value }))}
           />
         </label>
-
-        {!loading && (
-          <span className="toolbar-meta">
-            {productosFiltrados.length} de {productos.length}
-          </span>
-        )}
-      </div>
+        <label className="mov-filtros__control">
+          <span>Código</span>
+          <input
+            type="search"
+            value={filtros.codigo}
+            placeholder="Parte del código"
+            onChange={(e) => setFiltros((actual) => ({ ...actual, codigo: e.target.value }))}
+          />
+        </label>
+        <label className="mov-filtros__control">
+          <span>Categoría</span>
+          <select
+            value={filtros.idCategoria}
+            onChange={(e) => setFiltros((actual) => ({ ...actual, idCategoria: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {categorias.map((categoria) => (
+              <option key={categoria.id} value={categoria.id}>
+                {categoria.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="mov-filtros__check">
+          <input
+            type="checkbox"
+            checked={filtros.conExistencia}
+            onChange={(e) =>
+              setFiltros((actual) => ({ ...actual, conExistencia: e.target.checked }))
+            }
+          />
+          <span>Solo con existencia</span>
+        </label>
+        <div className="mov-filtros__actions">
+          <button
+            type="button"
+            className="mov-filtros__reset"
+            disabled={!hayFiltrosProducto}
+            onClick={limpiarFiltrosProducto}
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </form>
 
       <section className="card table-card">
         {loading ? (
@@ -449,9 +501,16 @@ export default function ProductosPage() {
                 {productosFiltrados.length === 0 && (
                   <tr>
                     <td colSpan={esAdmin ? 9 : 8} className="empty-cell">
-                      {productos.length === 0
-                        ? "No hay productos registrados."
-                        : "No se encontraron productos con esa búsqueda."}
+                      {productos.length === 0 ? (
+                        "No hay productos registrados."
+                      ) : (
+                        <div className="empty-filtros">
+                          <p>No hay resultados</p>
+                          <button type="button" className="btn-ghost" onClick={limpiarFiltrosProducto}>
+                            Limpiar filtros
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )}

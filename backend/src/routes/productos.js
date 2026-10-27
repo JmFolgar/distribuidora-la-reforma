@@ -16,6 +16,7 @@ import {
   subirImagen,
 } from "../imagenProducto.js";
 import { enteroNoNegativo, montoPositivo } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -328,6 +329,17 @@ router.post("/", requireRole(...ROLES_ESCRITURA), subirImagen, async (req, res, 
       version: 0,
     });
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PRODUCTOS",
+      accion: "CREAR",
+      entidad: "FER_PRODUCTO",
+      idRegistro: creado.id,
+      registro: creado.codigo,
+      valorNuevo: { precioVenta: creado.precioVenta, nombre: creado.nombre },
+      mensaje: `Alta del producto ${creado.codigo}`,
+    });
+
     res.status(201).json({
       success: true,
       data: await productoConInventario(creado.id),
@@ -406,6 +418,15 @@ router.delete("/:id", requireRole(...ROLES_ESCRITURA), async (req, res, next) =>
             fechaModificacion: new Date(),
           })
           .where(eq(ferProducto.id, id));
+        await registrarAuditoria({
+          idUsuario: Number(req.user.sub),
+          modulo: "PRODUCTOS",
+          accion: "DESACTIVAR",
+          entidad: "FER_PRODUCTO",
+          idRegistro: id,
+          registro: producto.codigo,
+          mensaje: `El producto ${producto.codigo} pasó a inactivo`,
+        });
       }
 
       const data = await productoConInventario(id);
@@ -423,6 +444,16 @@ router.delete("/:id", requireRole(...ROLES_ESCRITURA), async (req, res, next) =>
       await tx.delete(ferProducto).where(eq(ferProducto.id, id));
     });
     borrarImagen(producto.imagen);
+
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "PRODUCTOS",
+      accion: "ELIMINAR",
+      entidad: "FER_PRODUCTO",
+      idRegistro: id,
+      registro: producto.codigo,
+      mensaje: `Se eliminó el producto ${producto.codigo}`,
+    });
 
     res.json({
       success: true,
@@ -467,6 +498,16 @@ router.patch(
           fechaModificacion: new Date(),
         })
         .where(eq(ferProducto.id, id));
+
+      await registrarAuditoria({
+        idUsuario: Number(req.user.sub),
+        modulo: "PRODUCTOS",
+        accion: "ACTIVAR",
+        entidad: "FER_PRODUCTO",
+        idRegistro: id,
+        registro: producto.codigo,
+        mensaje: `El producto ${producto.codigo} volvió a estar activo`,
+      });
 
       res.json({
         success: true,
@@ -520,7 +561,13 @@ router.patch(
       }
 
       const [producto] = await db
-        .select({ id: ferProducto.id, imagen: ferProducto.imagen })
+        .select({
+          id: ferProducto.id,
+          imagen: ferProducto.imagen,
+          codigo: ferProducto.codigo,
+          precioVenta: ferProducto.precioVenta,
+          existenciaMinima: ferProducto.existenciaMinima,
+        })
         .from(ferProducto)
         .where(eq(ferProducto.id, id))
         .limit(1);
@@ -548,6 +595,24 @@ router.patch(
       if (imagenNueva && producto.imagen && producto.imagen !== imagenNueva) {
         borrarImagen(producto.imagen);
       }
+
+      await registrarAuditoria({
+        idUsuario: Number(req.user.sub),
+        modulo: "PRODUCTOS",
+        accion: "MODIFICAR",
+        entidad: "FER_PRODUCTO",
+        idRegistro: id,
+        registro: producto.codigo,
+        valorAnterior: {
+          precioVenta: producto.precioVenta,
+          existenciaMinima: producto.existenciaMinima,
+        },
+        valorNuevo: {
+          precioVenta: precioVenta.toFixed(2),
+          existenciaMinima: existenciaMinima.toFixed(3),
+        },
+        mensaje: `Modificación del producto ${producto.codigo}`,
+      });
 
       res.json({
         success: true,

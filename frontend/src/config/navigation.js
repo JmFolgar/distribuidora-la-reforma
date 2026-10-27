@@ -42,7 +42,6 @@ export const NAV_GROUPS = [
         path: "/pedidos",
         icon: ShoppingCart,
         roles: ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"],
-        soon: true,
       },
       {
         id: "ventas",
@@ -50,7 +49,6 @@ export const NAV_GROUPS = [
         path: "/ventas",
         icon: Receipt,
         roles: ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"],
-        soon: true,
       },
       {
         id: "pagos",
@@ -58,7 +56,6 @@ export const NAV_GROUPS = [
         path: "/pagos",
         icon: Wallet,
         roles: ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"],
-        soon: true,
       },
     ],
   },
@@ -119,7 +116,6 @@ export const NAV_GROUPS = [
         path: "/reportes",
         icon: BarChart3,
         roles: ["ADMINISTRADOR", "SUPERVISOR"],
-        soon: true,
       },
       {
         id: "auditoria",
@@ -127,7 +123,6 @@ export const NAV_GROUPS = [
         path: "/auditoria",
         icon: ScrollText,
         roles: ["ADMINISTRADOR"],
-        soon: true,
       },
     ],
   },

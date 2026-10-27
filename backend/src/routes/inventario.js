@@ -9,6 +9,7 @@ import {
   ferUsuario,
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -218,6 +219,16 @@ router.post("/ajustes", requireRole(...ROLES_INVENTARIO), async (req, res, next)
         fields: data.error.fields,
       });
     }
+
+    await registrarAuditoria({
+      idUsuario: Number(idUsuario),
+      modulo: "INVENTARIO",
+      accion: "AJUSTE",
+      entidad: "FER_PRODUCTO",
+      idRegistro: idProducto,
+      registro: data.numeroDocumento,
+      mensaje: `Ajuste ${data.numeroDocumento}`,
+    });
 
     res.status(201).json({
       success: true,

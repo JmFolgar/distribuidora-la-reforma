@@ -239,6 +239,106 @@ export function notificarAlertas() {
   window.dispatchEvent(new Event("inventario-alertas"));
 }
 
+export function listPedidos() {
+  return apiRequest("/pedidos");
+}
+
+export function getPedido(id) {
+  return apiRequest(`/pedidos/${id}`);
+}
+
+export function createPedido(payload) {
+  return apiRequest("/pedidos", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePedido(id, payload) {
+  return apiRequest(`/pedidos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function aprobarPedido(id) {
+  return apiRequest(`/pedidos/${id}/aprobar`, { method: "POST" });
+}
+
+export function rechazarPedido(id, motivo) {
+  return apiRequest(`/pedidos/${id}/rechazar`, {
+    method: "POST",
+    body: JSON.stringify({ motivo }),
+  });
+}
+
+export function cancelarPedido(id, motivo) {
+  return apiRequest(`/pedidos/${id}/cancelar`, {
+    method: "POST",
+    body: JSON.stringify({ motivo }),
+  });
+}
+
+export function listVentas() {
+  return apiRequest("/ventas");
+}
+
+export function getVenta(id) {
+  return apiRequest(`/ventas/${id}`);
+}
+
+export function createVenta(payload) {
+  return apiRequest("/ventas", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function registrarDevolucion(idVenta, payload) {
+  return apiRequest(`/ventas/${idVenta}/devoluciones`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listPagos() {
+  return apiRequest("/pagos");
+}
+
+export function listMetodosPago() {
+  return apiRequest("/pagos/metodos");
+}
+
+export function createPago(payload) {
+  return apiRequest("/pagos", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function reporteProductosBajoMinimo() {
+  return apiRequest("/reportes/productos-bajo-minimo");
+}
+
+export function reporteVentas({ desde, hasta }) {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  const qs = params.toString();
+  return apiRequest(`/reportes/ventas${qs ? `?${qs}` : ""}`);
+}
+
+export function listAuditoria(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.usuario) params.set("usuario", String(filtros.usuario));
+  if (filtros.modulo) params.set("modulo", filtros.modulo);
+  if (filtros.accion) params.set("accion", filtros.accion);
+  if (filtros.desde) params.set("desde", filtros.desde);
+  if (filtros.hasta) params.set("hasta", filtros.hasta);
+  const qs = params.toString();
+  return apiRequest(`/auditoria${qs ? `?${qs}` : ""}`);
+}
+
 export function listMovimientosInventario(filtros = {}) {
   const params = new URLSearchParams();
   if (filtros.idProducto) params.set("idProducto", String(filtros.idProducto));

@@ -17,6 +17,11 @@ import ProductosPage from "./pages/ProductosPage";
 import ProveedoresPage from "./pages/ProveedoresPage";
 import ComprasPage from "./pages/ComprasPage";
 import InventarioPage from "./pages/InventarioPage";
+import PedidosPage from "./pages/PedidosPage";
+import VentasPage from "./pages/VentasPage";
+import PagosPage from "./pages/PagosPage";
+import AuditoriaPage from "./pages/AuditoriaPage";
+import ReportesPage from "./pages/ReportesPage";
 import "./App.css";
 
 /**
@@ -106,6 +111,62 @@ export default function App() {
               <ProtectedRoute>
                 <RoleRoute roles={["ADMINISTRADOR", "SUPERVISOR"]}>
                   <ComprasPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pedidos"
+            element={
+              <ProtectedRoute>
+                <RoleRoute
+                  roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
+                >
+                  <PedidosPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ventas"
+            element={
+              <ProtectedRoute>
+                <RoleRoute
+                  roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
+                >
+                  <VentasPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pagos"
+            element={
+              <ProtectedRoute>
+                <RoleRoute
+                  roles={["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"]}
+                >
+                  <PagosPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reportes"
+            element={
+              <ProtectedRoute>
+                <RoleRoute roles={["ADMINISTRADOR", "SUPERVISOR"]}>
+                  <ReportesPage />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/auditoria"
+            element={
+              <ProtectedRoute>
+                <RoleRoute roles={["ADMINISTRADOR"]}>
+                  <AuditoriaPage />
                 </RoleRoute>
               </ProtectedRoute>
             }

@@ -14,6 +14,7 @@ import {
 } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { enteroPositivo, montoPositivo } from "../validacion.js";
+import { registrarAuditoria } from "../auditoria.js";
 
 const router = Router();
 
@@ -408,6 +409,16 @@ router.post("/", requireRole(...ROLES_COMPRAS), async (req, res, next) => {
       resultado.proveedorNombre
     );
 
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "COMPRAS",
+      accion: "CREAR",
+      entidad: "FER_COMPRA",
+      idRegistro: data.id,
+      registro: data.numeroCompra,
+      mensaje: `Compra ${data.numeroCompra}`,
+    });
+
     res.status(201).json({
       success: true,
       data,
@@ -607,6 +618,16 @@ router.post(
         resultado.proveedorNombre
       );
 
+      await registrarAuditoria({
+        idUsuario: Number(req.user.sub),
+        modulo: "COMPRAS",
+        accion: "RECEPCION",
+        entidad: "FER_RECEPCION",
+        idRegistro: resultado.recepcion.id,
+        registro: resultado.recepcion.numeroRecepcion,
+        mensaje: `Recepción ${resultado.recepcion.numeroRecepcion} de ${data.numeroCompra}`,
+      });
+
       res.json({
         success: true,
         data: {
@@ -715,6 +736,16 @@ router.patch("/:id", requireRole(...ROLES_COMPRAS), async (req, res, next) => {
       resultado.compra,
       resultado.proveedorNombre
     );
+
+    await registrarAuditoria({
+      idUsuario: Number(req.user.sub),
+      modulo: "COMPRAS",
+      accion: "MODIFICAR",
+      entidad: "FER_COMPRA",
+      idRegistro: data.id,
+      registro: data.numeroCompra,
+      mensaje: `Compra ${data.numeroCompra} actualizada`,
+    });
 
     res.json({
       success: true,
