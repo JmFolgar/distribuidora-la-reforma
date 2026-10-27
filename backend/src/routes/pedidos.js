@@ -18,6 +18,7 @@ import {
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { enteroPositivo } from "../validacion.js";
 import { registrarAuditoria } from "../auditoria.js";
+import { asegurarPorcentajeSinAprobacion } from "../parametros.js";
 
 const router = Router();
 
@@ -25,9 +26,6 @@ router.use(requireAuth);
 
 const ROLES = ["ADMINISTRADOR", "SUPERVISOR", "OPERADOR"];
 const ROLES_APROBACION = ["ADMINISTRADOR", "SUPERVISOR"];
-
-/** Porcentaje de descuento que se puede aplicar sin que un supervisor lo autorice. */
-export const PORCENTAJE_MAXIMO_SIN_APROBACION = 10;
 
 const ESTADO_CREADO = "CREADO";
 const ESTADO_PENDIENTE = "PENDIENTE_APROBACION";
@@ -453,7 +451,7 @@ router.get("/", requireRole(...ROLES), async (_req, res, next) => {
     const detalles = await lineasDePedidos(rows.map((row) => row.id));
     res.json({
       success: true,
-      porcentajeMaximoSinAprobacion: PORCENTAJE_MAXIMO_SIN_APROBACION,
+      porcentajeMaximoSinAprobacion: (await asegurarPorcentajeSinAprobacion()).porcentaje,
       data: rows.map((row) => mapPedido(row, detalles.get(row.id) || [])),
     });
   } catch (error) {
@@ -475,7 +473,7 @@ router.get("/:id", requireRole(...ROLES), async (req, res, next) => {
 
     res.json({
       success: true,
-      porcentajeMaximoSinAprobacion: PORCENTAJE_MAXIMO_SIN_APROBACION,
+      porcentajeMaximoSinAprobacion: (await asegurarPorcentajeSinAprobacion()).porcentaje,
       data,
     });
   } catch (error) {
@@ -514,8 +512,8 @@ async function guardarPedido(tx, { existente, body, usuarioId }) {
     };
   }
 
-  const supera =
-    body.porcentajeDescuento > PORCENTAJE_MAXIMO_SIN_APROBACION;
+  const limite = (await asegurarPorcentajeSinAprobacion(tx)).porcentaje;
+  const supera = body.porcentajeDescuento > limite;
   const estadoDestino = !body.enviar
     ? creado
     : supera
@@ -587,9 +585,9 @@ async function guardarPedido(tx, { existente, body, usuarioId }) {
       idUsuarioSolicita: usuarioId,
       tipoAprobacion: "DESCUENTO",
       valorSolicitado: body.porcentajeDescuento.toFixed(2),
-      valorPermitido: PORCENTAJE_MAXIMO_SIN_APROBACION.toFixed(2),
+      valorPermitido: limite.toFixed(2),
       estado: "PENDIENTE",
-      observacion: `Descuento de ${body.porcentajeDescuento}% superior al ${PORCENTAJE_MAXIMO_SIN_APROBACION}% permitido`,
+      observacion: `Descuento de ${body.porcentajeDescuento}% superior al ${limite}% permitido`,
     });
   }
 

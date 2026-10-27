@@ -498,6 +498,22 @@ export const ferDevolucion = pgTable("FER_DEVOLUCION", {
   motivo: varchar("DEV_MOTIVO", { length: 300 }).notNull(),
 });
 
+export const ferParametro = pgTable("FER_PARAMETRO", {
+  id: bigint("PAR_ID_PARAMETRO", { mode: "number" })
+    .generatedByDefaultAsIdentity()
+    .primaryKey(),
+  idUsuarioModifica: bigint("PAR_ID_USUARIO_MODIFICA", { mode: "number" }).notNull(),
+  codigo: varchar("PAR_CODIGO", { length: 80 }).notNull(),
+  nombre: varchar("PAR_NOMBRE", { length: 120 }).notNull(),
+  valor: varchar("PAR_VALOR", { length: 500 }).notNull(),
+  tipoDato: varchar("PAR_TIPO_DATO", { length: 15 }).notNull(),
+  descripcion: varchar("PAR_DESCRIPCION", { length: 300 }),
+  estado: char("PAR_ESTADO", { length: 1 }).notNull().default("A"),
+  fechaModificacion: timestamp("PAR_FECHA_MODIFICACION", { withTimezone: true })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const ferDetalleDevolucion = pgTable("FER_DETALLE_DEVOLUCION", {
   id: bigint("DDE_ID_DETALLE_DEVOLUCION", { mode: "number" })
     .generatedByDefaultAsIdentity()

@@ -31,6 +31,7 @@ const ETIQUETAS = {
   rol: "Rol",
   estado: "Estado",
   descuento: "Descuento",
+  porcentaje: "Porcentaje",
   motivo: "Motivo",
   resueltoPor: "Resuelto por",
   venta: "Venta",
@@ -66,6 +67,7 @@ function fechaCalendarioValida(value) {
 
 function textoValor(clave, valor) {
   if (clave === "estado") return ESTADOS[String(valor)] || String(valor);
+  if (clave === "porcentaje") return `${valor} %`;
   if (clave === "lineas" && Array.isArray(valor)) {
     return valor
       .map((linea) => `${linea.codigo} — ${linea.nombre}: ${linea.cantidad}`)

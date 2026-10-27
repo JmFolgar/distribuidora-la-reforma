@@ -12,6 +12,7 @@ import {
   ScrollText,
   UserCog,
   Shield,
+  Settings,
 } from "lucide-react";
 
 /**
@@ -135,6 +136,13 @@ export const NAV_GROUPS = [
         label: "Usuarios",
         path: "/usuarios",
         icon: UserCog,
+        roles: ["ADMINISTRADOR"],
+      },
+      {
+        id: "configuracion",
+        label: "Configuración",
+        path: "/configuracion",
+        icon: Settings,
         roles: ["ADMINISTRADOR"],
       },
       {

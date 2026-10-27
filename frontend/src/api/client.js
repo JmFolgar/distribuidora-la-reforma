@@ -340,6 +340,17 @@ export function reporteCompras({ desde, hasta, idProveedor }) {
   return apiRequest(`/reportes/compras${qs ? `?${qs}` : ""}`);
 }
 
+export function getDescuentoConfig() {
+  return apiRequest("/configuracion/descuento");
+}
+
+export function guardarDescuentoConfig(porcentaje) {
+  return apiRequest("/configuracion/descuento", {
+    method: "PUT",
+    body: JSON.stringify({ porcentaje }),
+  });
+}
+
 export function reporteVentas({ desde, hasta }) {
   const params = new URLSearchParams();
   if (desde) params.set("desde", desde);

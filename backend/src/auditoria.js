@@ -12,6 +12,7 @@ export const MODULOS_AUDITORIA = [
   ["PEDIDOS", "Pedidos"],
   ["VENTAS", "Ventas"],
   ["PAGOS", "Pagos"],
+  ["CONFIGURACION", "Configuración"],
 ];
 
 export const ACCIONES_AUDITORIA = {
